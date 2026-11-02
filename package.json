@@ -1,0 +1,15 @@
+{
+  "name": "maxincome-2",
+  "version": "2.0.0",
+  "private": true,
+  "description": "MaxIncome - base segura de monitoramento e paper trading na Bybit Testnet",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
