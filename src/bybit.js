@@ -8,8 +8,12 @@ class BybitClient {
         this.apiKey = apiKey;
         this.apiSecret = apiSecret;
 
-        // Esta versão utiliza exclusivamente a Testnet.
-        this.baseUrl = 'https://api-testnet.bybit.com';
+        // Mainnet é selecionada somente por configuração explícita.
+        // O cliente continua limitado a endpoints de leitura neste estágio.
+        this.testnet = testnet !== false;
+        this.baseUrl = this.testnet
+            ? 'https://api-testnet.bybit.com'
+            : 'https://api.bybit.com';
         this.recvWindow = '5000';
     }
 
