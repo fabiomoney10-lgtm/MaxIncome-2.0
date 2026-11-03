@@ -24,6 +24,9 @@ jobs:
       - name: Instalar dependências
         run: npm install
 
+      - name: Testar bloqueios de negociação e acesso à Testnet
+        run: node --test
+
       - name: Testar inicialização e autenticação
         env:
           DASHBOARD_USER: teste
