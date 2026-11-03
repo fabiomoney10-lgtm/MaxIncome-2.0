@@ -1,6 +1,8 @@
 name: Security smoke test
 
 on:
+  push:
+    branches: [feature/spot-live-risk-controls]
   pull_request:
     branches: [main]
   workflow_dispatch:
