@@ -42,6 +42,7 @@ class LiveSpotRiskGuard {
     fxBrlPerUsdt,
     availableUsdt,
     currentExposureBrl,
+    openRiskBrl = 0,
     realizedDailyLossBrl,
     tradesToday,
     feeRate,
@@ -60,7 +61,7 @@ class LiveSpotRiskGuard {
     }
     const numbers = {
       entryPrice, stopLossPrice, takeProfitPrice, fxBrlPerUsdt,
-      availableUsdt, currentExposureBrl, realizedDailyLossBrl,
+      availableUsdt, currentExposureBrl, openRiskBrl, realizedDailyLossBrl,
       tradesToday, feeRate, slippageRate, minOrderValueUsdt
     };
     for (const [key, value] of Object.entries(numbers)) {
@@ -78,7 +79,7 @@ class LiveSpotRiskGuard {
     if (feeRate >= 1 || slippageRate >= 1) {
       return deny('Taxas ou slippage fora do intervalo permitido.');
     }
-    if (realizedDailyLossBrl >= this.limits.maxDailyLossBrl) {
+    if (realizedDailyLossBrl + openRiskBrl >= this.limits.maxDailyLossBrl) {
       return deny('Limite de perda diária atingido; novas operações bloqueadas.');
     }
     if (tradesToday >= this.limits.maxTradesPerDay) {
@@ -88,11 +89,11 @@ class LiveSpotRiskGuard {
       return deny('Limite de exposição total atingido.');
     }
 
-    const remainingDailyRiskBrl = this.limits.maxDailyLossBrl - realizedDailyLossBrl;
+    const remainingDailyRiskBrl = this.limits.maxDailyLossBrl - realizedDailyLossBrl - openRiskBrl;
     const riskBudgetBrl = Math.min(this.limits.riskPerTradeBrl, remainingDailyRiskBrl);
     const riskBudgetUsdt = riskBudgetBrl / fxBrlPerUsdt;
     const priceRiskRate = (entryPrice - stopLossPrice) / entryPrice;
-    const estimatedRoundTripCostRate = (2 * feeRate) + slippageRate;
+    const estimatedRoundTripCostRate = (2 * feeRate) + (2 * slippageRate);
     const totalRiskRate = priceRiskRate + estimatedRoundTripCostRate;
     if (!Number.isFinite(totalRiskRate) || totalRiskRate <= 0) {
       return deny('Não foi possível calcular o risco total da operação.');
