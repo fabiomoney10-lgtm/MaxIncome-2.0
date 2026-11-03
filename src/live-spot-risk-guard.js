@@ -17,7 +17,7 @@ class LiveSpotRiskGuard {
       maxTradesPerDay: Number(maxTradesPerDay),
       maxCapitalExposureBrl: Number(maxCapitalExposureBrl)
     };
-    for ( (const [key, value] of Object.entries(this.limits)) ) {
+    for (const [key, value] of Object.entries(this.limits)) {
       if (!Number.isFinite(value) || value <= 0) {
         throw new Error(`Limite inválido: ${key}`);
       }
