@@ -71,7 +71,9 @@ test('rejects stale or unavailable FX and invalid costs', () => {
 
 test('counts already-open risk against the daily loss budget', () => {
   const guard = new LiveSpotRiskGuard();
-  assert.equal(guard.evaluateBuy({ ...base, openRiskBrl: 50 }).allowed, false);
+  assert.equal(guard.evaluateBuy({ ...base, openRiskBrl: 100 }).allowed, false);
   const result = guard.evaluateBuy({ ...base, openRiskBrl: 75 });
-  assert.equal(result.allowed, false);
+  assert.equal(result.allowed, true);
+  assert.equal(result.riskBudgetBrl, 25);
+  assert.ok(result.estimatedRiskBrl <= 25.000001);
 });
