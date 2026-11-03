@@ -49,7 +49,7 @@ app.get('/api/refresh', async (_req, res) => {
 
 app.get('/api/balance', async (req, res) => {
   const expected = process.env.MAXINCOME_READ_TOKEN || '';
-  const supplied = (req.get('authorization') || '').replace(/^Bearer\\s+/i, '');
+  const supplied = (req.get('authorization') || '').replace(/^Bearer\s+/i, '');
   const expectedBuffer = Buffer.from(expected);
   const suppliedBuffer = Buffer.from(supplied);
   if (!expected || expectedBuffer.length !== suppliedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, suppliedBuffer)) {
