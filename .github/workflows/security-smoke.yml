@@ -1,0 +1,58 @@
+name: Security smoke test
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Testar bloqueios de negociação e acesso à Testnet
+        run: node --test
+
+      - name: Testar inicialização e autenticação
+        env:
+          DASHBOARD_USER: teste
+          DASHBOARD_PASSWORD: SenhaTemporaria123
+          TRADING_MODE: paper
+          ENGINE_INTERVAL_MS: "60000"
+        run: |
+          node server.js > server.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+
+          for i in {1..20}; do
+            if curl --silent --fail http://localhost:10000/api/health >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://localhost:10000/api/health)" = "200"
+
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://localhost:10000/api/status)" = "401"
+
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --user teste:SenhaTemporaria123 \
+            http://localhost:10000/api/status)" = "200"
+
+          echo "Inicialização, health check e autenticação: OK"
