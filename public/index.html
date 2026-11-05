@@ -35,8 +35,8 @@ async function refresh(){
   const p=s.paper||{};const d=p.daily||{};const cfg=p.settings||{};
   document.getElementById('market').textContent=s.connected?'Mercado online':'Mercado indisponível';
   document.getElementById('market').className='big '+(s.connected?'good':'bad');
-  document.getElementById('updated').textContent='Atualizado: '+(s.updatedAt?new Date(s.updatedAt).toLocaleString('pt-BR'):'--')+' · '+s.environment;
-  document.getElementById('badge').textContent='PAPER · '+(s.environment||'BYBIT')+' · ORDENS REAIS DESABILITADAS';
+  document.getElementById('updated').textContent='Atualizado: '+(s.updatedAt?new Date(s.updatedAt).toLocaleString('pt-BR'):'--')+' · Dados: '+(s.marketDataEnvironment||'BYBIT MAINNET')+' · Ambiente privado: '+(s.environment||'não utilizado no PAPER');
+  document.getElementById('badge').textContent='PAPER · DADOS PÚBLICOS BYBIT MAINNET · ORDENS REAIS BLOQUEADAS';
   document.getElementById('database').textContent='Conectado';
   document.getElementById('database').className='big good';
   document.getElementById('dbdetail').textContent='Histórico persistente ativo';
