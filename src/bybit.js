@@ -7,7 +7,10 @@ class BybitClient {
         this.apiKey = apiKey;
         this.apiSecret = apiSecret;
         this.testnet = testnet !== false;
-        this.environment = this.testnet ? 'testnet' : 'mainnet';
+        this.environment = this.testnet ? 'BYBIT TESTNET (dados públicos via MAINNET)' : 'BYBIT MAINNET';
+        // Public market data is read from Bybit mainnet. Testnet remains the
+        // private endpoint if signed requests are ever explicitly enabled.
+        this.marketDataBaseUrl = 'https://api.bybit.com';
         this.baseUrl = this.testnet
             ? 'https://api-testnet.bybit.com'
             : 'https://api.bybit.com';
@@ -17,7 +20,8 @@ class BybitClient {
     async request(method, endpoint, params = {}, signed = false) {
         const query = new URLSearchParams(params).toString();
         const body = method === 'POST' ? JSON.stringify(params) : '';
-        const url = this.baseUrl + endpoint +
+        const requestBaseUrl = signed ? this.baseUrl : this.marketDataBaseUrl;
+        const url = requestBaseUrl + endpoint +
             (method === 'GET' && query ? `?${query}` : '');
         const headers = {
             'Content-Type': 'application/json',
