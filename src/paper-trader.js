@@ -1,15 +1,25 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const { Pool } = require('pg');
 
 function createPool(connectionString) {
   if (!connectionString) throw new Error('DATABASE_URL não configurada; motor PAPER permanece bloqueado.');
+  // Supabase signs its PostgreSQL/pooler certificates with its own root CA.
+  // Remove URL SSL flags because node-postgres would otherwise override this
+  // explicit CA configuration when parsing DATABASE_URL.
+  const parsedUrl = new URL(connectionString);
+  for (const key of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey']) {
+    parsedUrl.searchParams.delete(key);
+  }
+  const ca = fs.readFileSync(path.join(__dirname, '..', 'certs', 'prod-ca-2021.crt'), 'utf8');
   return new Pool({
-    connectionString,
+    connectionString: parsedUrl.toString(),
     max: 3,
     idleTimeoutMillis: 10000,
     connectionTimeoutMillis: 10000,
-    ssl: { rejectUnauthorized: true },
+    ssl: { ca, rejectUnauthorized: true },
     application_name: 'maxincome-paper'
   });
 }
