@@ -1,48 +1,58 @@
 <!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MaxIncome 2.0</title>
 <style>
 :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#101722;color:#e8edf5;font:15px Arial,sans-serif;padding:24px}
-header{max-width:1100px;margin:auto;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+header,main{max-width:1150px;margin:auto}header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 h1{color:#f0b90b;margin:0}.badge{padding:8px 12px;border-radius:20px;background:#493b12;color:#ffd95a;font-weight:bold}
-main{max-width:1100px;margin:22px auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-.card{background:#1b2635;border:1px solid #2d3b4d;border-radius:12px;padding:18px;min-width:0}
-.wide{grid-column:1/-1}.muted{color:#aab6c5}.big{font-size:25px;font-weight:bold;margin:8px 0}
-table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #344256}
-.good{color:#52d6a0}.warn{color:#ffd166}.bad{color:#ff7777}
-button{background:#f0b90b;border:0;border-radius:7px;padding:10px 14px;font-weight:bold;cursor:pointer}
-pre{white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;color:#9fe6c6}
+main{margin-top:22px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.card{background:#1b2635;border:1px solid #2d3b4d;border-radius:12px;padding:18px;min-width:0}.wide{grid-column:1/-1}
+.muted{color:#aab6c5}.big{font-size:25px;font-weight:bold;margin:8px 0}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:9px;border-bottom:1px solid #344256}
+.good{color:#52d6a0}.warn{color:#ffd166}.bad{color:#ff7777}button{background:#f0b90b;border:0;border-radius:7px;padding:10px 14px;font-weight:bold;cursor:pointer}
+pre{white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto;color:#9fe6c6}
 @media(max-width:700px){main{grid-template-columns:1fr}.wide{grid-column:auto}}
-</style>
-</head>
-<body>
-<header><div><h1>MaxIncome 2.0</h1><div class="muted">Monitoramento e análise de mercado</div></div><span class="badge">PAPER · TESTNET · ORDENS BLOQUEADAS</span></header>
+</style></head><body>
+<header><div><h1>MaxIncome 2.0</h1><div class="muted">Simulador de operações • dados públicos de mercado</div></div><span id="badge" class="badge">PAPER · ORDENS REAIS DESABILITADAS</span></header>
 <main>
-<section class="card"><h3>Conexão</h3><div id="connection" class="big warn">Conectando...</div><div id="updated" class="muted">Aguardando primeira leitura</div></section>
-<section class="card"><h3>Carteira Bybit</h3><div class="big">Saldo protegido</div><div class="muted">Os dados privados da carteira não são expostos no painel público. A conexão e os dados de mercado são monitorados normalmente.</div></section>
+<section class="card"><h3>Mercado</h3><div id="market" class="big warn">Conectando...</div><div id="updated" class="muted">Aguardando atualização</div></section>
+<section class="card"><h3>Banco de dados</h3><div id="database" class="big warn">Verificando...</div><div id="dbdetail" class="muted">Persistência do simulador</div></section>
+<section class="card"><h3>Capital virtual</h3><div id="capital" class="big">R$ 5.000,00</div><div id="daily" class="muted">Aguardando estado diário</div></section>
+<section class="card"><h3>Limites de risco</h3><div id="limits" class="muted">R$ 50 por operação · R$ 100 por dia · até 5 operações/dia · exposição R$ 5.000</div></section>
 <section class="card wide"><h3>Análise dos ativos</h3><table><thead><tr><th>Ativo</th><th>Preço</th><th>Variação 24h</th><th>Sinal</th><th>SMA 9 / 21</th></tr></thead><tbody id="assets"><tr><td colspan="5">Carregando...</td></tr></tbody></table></section>
-<section class="card"><h3>Proteção dos XRP antigos</h3><div id="legacy" class="big">6 XRP reservados</div><div id="botxrp" class="muted">Saldo disponível do robô: --</div><p class="muted">O motor não envia ordens de compra ou venda nesta etapa.</p></section>
-<section class="card"><h3>Controles</h3><button id="refresh">Atualizar agora</button><p class="muted">Esta versão é somente leitura e análise. Não existe botão de negociação.</p></section>
-<section class="card wide"><h3>Registro do sistema</h3><pre id="log">Aguardando...</pre></section>
+<section class="card wide"><h3>Posições PAPER abertas</h3><table><thead><tr><th>Ativo</th><th>Quantidade</th><th>Entrada</th><th>Stop</th><th>Alvo</th><th>Risco (R$)</th></tr></thead><tbody id="open"><tr><td colspan="6">Carregando...</td></tr></tbody></table></section>
+<section class="card wide"><h3>Histórico de operações</h3><table><thead><tr><th>Ativo</th><th>Status</th><th>Entrada</th><th>Saída</th><th>Resultado líquido</th><th>Motivo</th></tr></thead><tbody id="history"><tr><td colspan="6">Carregando...</td></tr></tbody></table></section>
+<section class="card"><h3>Motor</h3><button id="refresh">Atualizar agora</button><p class="muted">O simulador não envia ordens à Bybit, não movimenta saldo real e permanece em PAPER.</p></section>
+<section class="card"><h3>Registro</h3><pre id="log">Aguardando...</pre></section>
 </main>
 <script>
-const fmt=(n,d=6)=>Number.isFinite(Number(n))?Number(n).toFixed(d):'--';
+const money=v=>Number.isFinite(Number(v))?'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'--';
+const num=(v,d=6)=>Number.isFinite(Number(v))?Number(v).toFixed(d):'--';
+const safe=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function refresh(){
-  const btn=document.getElementById('refresh');btn.disabled=true;
-  try{
-    const r=await fetch('/api/refresh');const s=await r.json();if(!r.ok)throw new Error(s.detail||s.error||'Erro');
-    document.getElementById('connection').textContent=s.connected?'Conectado':'Desconectado';
-    document.getElementById('connection').className='big '+(s.connected?'good':'bad');
-    document.getElementById('updated').textContent='Atualizado: '+(s.updatedAt?new Date(s.updatedAt).toLocaleString('pt-BR'):'--')+' · '+s.environment;
-    document.getElementById('legacy').textContent=fmt(s.legacyXrpReserved,4)+' XRP reservados';
-    document.getElementById('botxrp').textContent='Saldo da carteira protegido; reserva configurada: '+fmt(s.legacyXrpReserved,4)+' XRP. Não negociável nesta etapa.';
-    document.getElementById('assets').innerHTML=Object.entries(s.assets||{}).map(([sym,a])=>`<tr><td>${sym}</td><td>${a.error?'--':fmt(a.lastPrice,6)}</td><td>${a.error?'--':fmt(a.change24h,2)+'%'}</td><td class="${a.signal==='BULLISH'?'good':a.signal==='BEARISH'?'bad':'warn'}">${a.error?'ERRO':a.signal}</td><td>${a.error?'--':fmt(a.sma9,6)+' / '+fmt(a.sma21,6)}</td></tr>`).join('');
-    document.getElementById('log').textContent=(s.log||[]).join('\\n');
-  }catch(e){document.getElementById('connection').textContent='Falha: '+e.message;document.getElementById('connection').className='big bad';}
-  finally{btn.disabled=false;}
+ const btn=document.getElementById('refresh');btn.disabled=true;
+ try{
+  const r=await fetch('/api/refresh');const s=await r.json();if(!r.ok)throw new Error(s.detail||s.error||'Falha');
+  const p=s.paper||{};const d=p.daily||{};const cfg=p.settings||{};
+  document.getElementById('market').textContent=s.connected?'Mercado online':'Mercado indisponível';
+  document.getElementById('market').className='big '+(s.connected?'good':'bad');
+  document.getElementById('updated').textContent='Atualizado: '+(s.updatedAt?new Date(s.updatedAt).toLocaleString('pt-BR'):'--')+' · '+s.environment;
+  document.getElementById('badge').textContent='PAPER · '+(s.environment||'BYBIT')+' · ORDENS REAIS DESABILITADAS';
+  document.getElementById('database').textContent='Conectado';
+  document.getElementById('database').className='big good';
+  document.getElementById('dbdetail').textContent='Histórico persistente ativo';
+  document.getElementById('capital').textContent=money(cfg.initial_capital_brl||5000);
+  document.getElementById('daily').textContent='Resultado realizado: '+money(d.realized_pnl_brl||0)+' · não realizado: '+money(d.unrealized_pnl_brl||0)+' · operações: '+(d.trades_opened||0)+'/'+(cfg.max_trades_per_day||5)+(d.halted?' · MOTOR PAUSADO':'');
+  document.getElementById('limits').textContent='Risco/op.: '+money(cfg.max_risk_per_trade_brl||50)+' · perda diária: '+money(cfg.max_daily_loss_brl||100)+' · exposição: '+money(cfg.max_exposure_brl||5000)+' · stop '+num(cfg.stop_loss_pct||1,2)+'% · alvo '+num(cfg.take_profit_pct||2,2)+'% · taxa/lado '+num((cfg.fee_rate_per_side||0.001)*100,3)+'%';
+  document.getElementById('assets').innerHTML=Object.entries(s.assets||{}).map(([sym,a])=>'<tr><td>'+safe(sym)+'</td><td>'+(a.error?'--':num(a.lastPrice))+'</td><td>'+(a.error?'--':num(a.change24h,2)+'%')+'</td><td class="'+(a.signal==='BULLISH'?'good':a.signal==='BEARISH'?'bad':'warn')+'">'+safe(a.error?'ERRO':a.signal)+'</td><td>'+(a.error?'--':num(a.sma9)+' / '+num(a.sma21))+'</td></tr>').join('')||'<tr><td colspan="5">Sem dados</td></tr>';
+  document.getElementById('open').innerHTML=(p.openPositions||[]).map(t=>'<tr><td>'+safe(t.symbol)+'</td><td>'+num(t.quantity,8)+'</td><td>'+num(t.entry_price)+'</td><td>'+num(t.stop_price)+'</td><td>'+num(t.take_profit_price)+'</td><td>'+money(t.risk_brl)+'</td></tr>').join('')||'<tr><td colspan="6">Nenhuma posição aberta</td></tr>';
+  document.getElementById('history').innerHTML=(p.recentTrades||[]).map(t=>'<tr><td>'+safe(t.symbol)+'</td><td>'+safe(t.status)+'</td><td>'+num(t.entry_price)+'</td><td>'+num(t.exit_price)+'</td><td>'+money(t.pnl_net_brl)+'</td><td>'+safe(t.exit_reason||'--')+'</td></tr>').join('')||'<tr><td colspan="6">Nenhuma operação registrada</td></tr>';
+  document.getElementById('log').textContent=(s.log||[]).join('\n')+'\nFX USD/BRL indicativo: '+num(p.fxUsdBrl,4)+'\n'+(p.error||'');
+ }catch(e){
+  document.getElementById('market').textContent='Bloqueado: '+e.message;document.getElementById('market').className='big bad';
+  document.getElementById('database').textContent='Indisponível';document.getElementById('database').className='big bad';
+  document.getElementById('dbdetail').textContent='Configure DATABASE_URL no Render. Nenhuma operação será criada.';
+ }
+ finally{btn.disabled=false;}
 }
-document.getElementById('refresh').addEventListener('click',refresh);refresh();setInterval(refresh,15000);
-</script>
-</body></html>
+document.getElementById('refresh').addEventListener('click',refresh);refresh();setInterval(refresh,30000);
+</script></body></html>
