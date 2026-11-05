@@ -2,10 +2,10 @@ const { analyzeCandles } = require('./strategy');
 const { RiskManager } = require('./risk-manager');
 
 class TradingEngine {
-  constructor({ client, assets, legacyXrpReserved }) {
+  constructor({ client, assets, legacyXrpReserved, maxRiskBRL, maxDailyLossBRL, maxTradesPerDay, maxExposureBRL, stopLossPct, takeProfitPct }) {
     this.client = client;
     this.assets = assets;
-    this.risk = new RiskManager({ legacyXrpReserved });
+    this.risk = new RiskManager({ legacyXrpReserved, maxRiskBRL, maxDailyLossBRL, maxTradesPerDay, maxExposureBRL, stopLossPct, takeProfitPct });
     this.state = {
       mode: 'PAPER',
       environment: client.environment === 'mainnet' ? 'BYBIT MAINNET' : 'BYBIT TESTNET',
