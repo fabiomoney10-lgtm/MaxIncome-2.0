@@ -8,7 +8,7 @@ class TradingEngine {
     this.risk = new RiskManager({ legacyXrpReserved });
     this.state = {
       mode: 'PAPER',
-      environment: 'BYBIT TESTNET',
+      environment: client.environment === 'mainnet' ? 'BYBIT MAINNET' : 'BYBIT TESTNET',
       updatedAt: null,
       connected: false,
       balance: null,
@@ -52,7 +52,7 @@ class TradingEngine {
 
       this.state.assets = Object.fromEntries(rows);
       this.state.updatedAt = new Date().toISOString();
-      this.addLog('Dados de carteira e mercado atualizados. Modo PAPER: ordens bloqueadas.');
+      this.addLog(`Dados de carteira e mercado atualizados. Ambiente: ${this.client.environment}. Modo PAPER: ordens bloqueadas.`);
     } catch (err) {
       this.state.connected = false;
       this.state.error = err.message;
