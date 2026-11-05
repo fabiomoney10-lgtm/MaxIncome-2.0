@@ -22,3 +22,25 @@ test('risk manager never authorizes a real Bybit order',()=>{
  const risk=new RiskManager();
  assert.equal(risk.evaluate({signal:'BULLISH',usdtBalance:100}).allowed,false);
 });
+
+
+test('Bybit reports public market data and private environment separately',()=>{
+ const {BybitClient}=require('../src/bybit');
+ const testnet=new BybitClient({testnet:true});
+ assert.equal(testnet.marketDataEnvironment,'BYBIT MAINNET');
+ assert.equal(testnet.tradingEnvironment,'BYBIT TESTNET');
+ const mainnet=new BybitClient({testnet:false});
+ assert.equal(mainnet.marketDataEnvironment,'BYBIT MAINNET');
+ assert.equal(mainnet.tradingEnvironment,'BYBIT MAINNET');
+});
+
+test('trading engine status clearly identifies PAPER and blocks real execution',()=>{
+ const {TradingEngine}=require('../src/trading-engine');
+ const client={environment:'BYBIT TESTNET',tradingEnvironment:'BYBIT TESTNET',marketDataEnvironment:'BYBIT MAINNET'};
+ const engine=new TradingEngine({client,assets:['BTCUSDT']});
+ const status=engine.getStatus();
+ assert.equal(status.mode,'PAPER');
+ assert.equal(status.environment,'BYBIT TESTNET');
+ assert.equal(status.marketDataEnvironment,'BYBIT MAINNET');
+ assert.equal(status.orderExecutionEnabled,false);
+});
