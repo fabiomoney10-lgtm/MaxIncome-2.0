@@ -27,7 +27,13 @@ const client = new BybitClient({
 const engine = new TradingEngine({
   client,
   assets,
-  legacyXrpReserved: Number(process.env.LEGACY_XRP_RESERVED || 6)
+  legacyXrpReserved: Number(process.env.LEGACY_XRP_RESERVED || 6),
+  maxRiskBRL: process.env.MAX_RISK_BRL || 50,
+  maxDailyLossBRL: process.env.MAX_DAILY_LOSS_BRL || 100,
+  maxTradesPerDay: process.env.MAX_TRADES_PER_DAY || 5,
+  maxExposureBRL: process.env.MAX_EXPOSURE_BRL || 5000,
+  stopLossPct: process.env.PAPER_STOP_LOSS_PCT || 1,
+  takeProfitPct: process.env.PAPER_TAKE_PROFIT_PCT || 2
 });
 
 app.get('/api/health', (_req, res) => {
