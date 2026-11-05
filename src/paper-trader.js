@@ -100,7 +100,7 @@ class PaperTrader {
         const openExposure = Number(openNow.rows[0].exposure || 0);
         let unrealized = 0;
         if (fx) {
-          const liveOpen = await client.query(\"SELECT symbol,quantity,entry_price,metadata,estimated_entry_fee_brl FROM public.paper_trades WHERE status='OPEN'\");
+          const liveOpen = await client.query("SELECT symbol,quantity,entry_price,metadata,estimated_entry_fee_brl FROM public.paper_trades WHERE status='OPEN'");
           for (const position of liveOpen.rows) {
             const last = Number(market[position.symbol] && market[position.symbol].lastPrice);
             const positionFx = Number((position.metadata && position.metadata.fxUsdBrl) || fx);
