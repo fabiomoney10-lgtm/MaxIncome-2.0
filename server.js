@@ -22,14 +22,25 @@ const engine=new TradingEngine({
  stopLossPct:process.env.PAPER_STOP_LOSS_PCT||1,takeProfitPct:process.env.PAPER_TAKE_PROFIT_PCT||2
 });
 let pool=null,paperTrader=null,databaseError=null;
+const engineLoop={running:false,lastStartedAt:null,lastSuccessAt:null,lastError:null};
 try{
  pool=createPool(process.env.DATABASE_URL||'');
  paperTrader=new PaperTrader({pool,assets,stopLossPct:process.env.PAPER_STOP_LOSS_PCT||1,feeRatePerSide:process.env.PAPER_FEE_RATE_PER_SIDE||0.001});
 }catch(e){databaseError=e.message;}
 async function runCycle(){
- await engine.runOnce();
- if(!paperTrader)throw new Error(databaseError||'DATABASE_URL não configurada.');
- await paperTrader.runOnce(engine.getStatus().assets||{});
+ if(engineLoop.running)return;
+ engineLoop.running=true;
+ engineLoop.lastStartedAt=new Date().toISOString();
+ try{
+  await engine.runOnce();
+  if(!paperTrader)throw new Error(databaseError||'DATABASE_URL não configurada.');
+  await paperTrader.runOnce(engine.getStatus().assets||{});
+  engineLoop.lastSuccessAt=new Date().toISOString();
+  engineLoop.lastError=null;
+ }catch(e){
+  engineLoop.lastError=e.message;
+  throw e;
+ }finally{engineLoop.running=false;}
 }
 function publicStatus(){
  const s=engine.getStatus();
@@ -39,7 +50,10 @@ function publicStatus(){
 app.get('/api/health',async(_req,res)=>{
  let db=false;
  try{if(pool){await pool.query('SELECT 1');db=true;}}catch(e){databaseError=e.message;}
- res.status(db?200:503).json({ok:db,service:'MaxIncome',mode:'PAPER',bybitEnvironment,databaseConnected:db,orderExecutionEnabled:false,databaseError:db?null:databaseError,timestamp:new Date().toISOString()});
+ const marketConnected=engine.getStatus().connected;
+ const cycleFresh=!!engineLoop.lastSuccessAt&&(Date.now()-Date.parse(engineLoop.lastSuccessAt)<120000);
+ const ok=db&&marketConnected&&cycleFresh&&!engineLoop.lastError;
+ res.status(ok?200:503).json({ok,service:'MaxIncome',mode:'PAPER',bybitEnvironment,marketDataEnvironment:'BYBIT MAINNET',marketConnected,databaseConnected:db,engineLoop:{...engineLoop},orderExecutionEnabled:false,databaseError:db?null:databaseError,timestamp:new Date().toISOString()});
 });
 app.get('/api/status',(_req,res)=>res.json(publicStatus()));
 app.get('/api/paper/status',async(_req,res)=>{
