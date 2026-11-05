@@ -127,7 +127,10 @@ class PaperTrader {
           await client.query("INSERT INTO public.paper_events(event_type,message,details) VALUES ('DAILY_HALT','Motor PAPER pausado pelo limite diário.', $1)", [JSON.stringify({ dailyLoss })]);
         }
 
-        if (fx && !halted && Number(state.trades_opened) < Number(settings.max_trades_per_day)) {
+        // The database switch is authoritative: monitoring/closing existing positions continues,
+        // but no new PAPER position is opened while trading_enabled is false.
+        const tradingEnabled = settings.trading_enabled === true;
+        if (fx && tradingEnabled && !halted && Number(state.trades_opened) < Number(settings.max_trades_per_day)) {
           for (const symbol of this.assets) {
             const ticker = market[symbol];
             if (!ticker || ticker.signal !== 'BULLISH' || !Number.isFinite(Number(ticker.lastPrice))) continue;
@@ -198,7 +201,7 @@ class PaperTrader {
       this.pool.query("SELECT event_type,symbol,message,created_at FROM public.paper_events ORDER BY created_at DESC LIMIT 20")
     ]);
     return {
-      enabled: true,
+      enabled: settings.rows[0]?.trading_enabled === true,
       mode: 'PAPER',
       orderExecutionEnabled: false,
       fxUsdBrl: this.lastFx,
