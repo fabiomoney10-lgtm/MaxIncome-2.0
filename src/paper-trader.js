@@ -132,13 +132,16 @@ class PaperTrader {
             const requestedRisk = Math.min(Number(settings.max_risk_per_trade_brl), Number(settings.initial_capital_brl) * 0.01);
             const riskLimitedQty = requestedRisk / riskPerUnitBrl;
             const remainingExposure = Math.max(0, Number(settings.max_exposure_brl) - openExposure);
-            const equity = Number(settings.initial_capital_brl) + Number(state.realized_pnl_brl) + unrealized;\n            const remainingCapital = Math.max(0, equity - openExposure);
+            const equity = Number(settings.initial_capital_brl) + Number(state.realized_pnl_brl) + unrealized;
+            const remainingCapital = Math.max(0, equity - openExposure);
             const maxNotional = Math.min(remainingExposure, remainingCapital);
             const qty = Math.min(riskLimitedQty, maxNotional / (entry * fx));
             const notional = qty * entry * fx;
             const actualRisk = qty * riskPerUnitBrl;
             if (!(qty > 0) || actualRisk > Number(settings.max_risk_per_trade_brl) + 0.01 || notional < 10) continue;
-            const minimumNetTwoToOneMove = 2 * (stopPct + feePct) + feePct;\n            const configuredTargetMove = Number(settings.take_profit_pct) / 100;\n            const takeProfit = entry * (1 + Math.max(configuredTargetMove, minimumNetTwoToOneMove));
+            const minimumNetTwoToOneMove = 2 * (stopPct + feePct) + feePct;
+            const configuredTargetMove = Number(settings.take_profit_pct) / 100;
+            const takeProfit = entry * (1 + Math.max(configuredTargetMove, minimumNetTwoToOneMove));
             const entryFee = notional * Number(settings.fee_rate_per_side);
             const exitFee = notional * Number(settings.fee_rate_per_side);
             const idempotency = 'paper:' + String(day) + ':' + symbol + ':' + String(Number(state.trades_opened) + 1);
