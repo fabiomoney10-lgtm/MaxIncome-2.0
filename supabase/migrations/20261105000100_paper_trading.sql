@@ -75,3 +75,12 @@ alter table public.paper_trades enable row level security;
 alter table public.paper_events enable row level security;
 revoke all on public.paper_settings,public.paper_daily_state,public.paper_trades,public.paper_events from public,anon,authenticated;
 grant select,insert,update,delete on public.paper_settings,public.paper_daily_state,public.paper_trades,public.paper_events to service_role;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'paper_trades_minimum_reward_risk') THEN
+    ALTER TABLE public.paper_trades
+      ADD CONSTRAINT paper_trades_minimum_reward_risk
+      CHECK (take_profit_price - entry_price >= (entry_price - stop_price) * 2);
+  END IF;
+END $$;
