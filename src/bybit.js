@@ -7,7 +7,9 @@ class BybitClient {
         this.apiKey = apiKey;
         this.apiSecret = apiSecret;
         this.testnet = testnet !== false;
-        this.environment = this.testnet ? 'BYBIT TESTNET (dados públicos via MAINNET)' : 'BYBIT MAINNET';
+        this.tradingEnvironment = this.testnet ? 'BYBIT TESTNET' : 'BYBIT MAINNET';
+        this.marketDataEnvironment = 'BYBIT MAINNET';
+        this.environment = this.tradingEnvironment;
         // Public market data is read from Bybit mainnet. Testnet remains the
         // private endpoint if signed requests are ever explicitly enabled.
         this.marketDataBaseUrl = 'https://api.bybit.com';
