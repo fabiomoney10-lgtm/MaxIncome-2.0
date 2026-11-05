@@ -70,7 +70,9 @@ class PaperTrader {
           if (price <= Number(trade.stop_price)) reason = 'STOP_LOSS';
           else if (price >= Number(trade.take_profit_price)) reason = 'TAKE_PROFIT';
           if (!reason) continue;
-          const tradeFx = Number((trade.metadata && trade.metadata.fxUsdBrl) || fx || 0);\n          if (!(tradeFx > 0)) continue;\n          const gross = (price - Number(trade.entry_price)) * Number(trade.quantity) * tradeFx;
+          const tradeFx = Number((trade.metadata && trade.metadata.fxUsdBrl) || fx || 0);
+          if (!(tradeFx > 0)) continue;
+          const gross = (price - Number(trade.entry_price)) * Number(trade.quantity) * tradeFx;
           const entryFee = Number(trade.estimated_entry_fee_brl);
           const exitFee = price * Number(trade.quantity) * tradeFx * this.feeRatePerSide;
           const fees = entryFee + exitFee;
@@ -96,7 +98,19 @@ class PaperTrader {
         const state = updatedDailyResult.rows[0];
         const openNow = await client.query("SELECT COALESCE(sum(entry_value_brl),0) AS exposure FROM public.paper_trades WHERE status='OPEN'");
         const openExposure = Number(openNow.rows[0].exposure || 0);
-        let unrealized = 0;\n        if (fx) {\n          const liveOpen = await client.query(\"SELECT symbol,quantity,entry_price,metadata,estimated_entry_fee_brl FROM public.paper_trades WHERE status='OPEN'\");\n          for (const position of liveOpen.rows) {\n            const last = Number(market[position.symbol] && market[position.symbol].lastPrice);\n            const positionFx = Number((position.metadata && position.metadata.fxUsdBrl) || fx);\n            if (Number.isFinite(last) && last > 0 && positionFx > 0) {\n              unrealized += (last - Number(position.entry_price)) * Number(position.quantity) * positionFx - Number(position.estimated_entry_fee_brl) - (last * Number(position.quantity) * positionFx * this.feeRatePerSide);\n            }\n          }\n          await client.query('UPDATE public.paper_daily_state SET unrealized_pnl_brl=$1, updated_at=now() WHERE trading_date=$2',[unrealized,day]);\n        }\n        const dailyLoss = Number(state.realized_pnl_brl) + unrealized;
+        let unrealized = 0;
+        if (fx) {
+          const liveOpen = await client.query(\"SELECT symbol,quantity,entry_price,metadata,estimated_entry_fee_brl FROM public.paper_trades WHERE status='OPEN'\");
+          for (const position of liveOpen.rows) {
+            const last = Number(market[position.symbol] && market[position.symbol].lastPrice);
+            const positionFx = Number((position.metadata && position.metadata.fxUsdBrl) || fx);
+            if (Number.isFinite(last) && last > 0 && positionFx > 0) {
+              unrealized += (last - Number(position.entry_price)) * Number(position.quantity) * positionFx - Number(position.estimated_entry_fee_brl) - (last * Number(position.quantity) * positionFx * this.feeRatePerSide);
+            }
+          }
+          await client.query('UPDATE public.paper_daily_state SET unrealized_pnl_brl=$1, updated_at=now() WHERE trading_date=$2',[unrealized,day]);
+        }
+        const dailyLoss = Number(state.realized_pnl_brl) + unrealized;
         const halted = Boolean(state.halted) || dailyLoss <= -Number(settings.max_daily_loss_brl);
         if (halted && !state.halted) {
           await client.query("UPDATE public.paper_daily_state SET halted=true, halt_reason='Limite de perda diária atingido', updated_at=now() WHERE trading_date=$1", [day]);
