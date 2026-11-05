@@ -18,13 +18,13 @@ pre{white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;co
 </style>
 </head>
 <body>
-<header><div><h1>MaxIncome 2.0</h1><div class="muted">Monitoramento e análise de mercado</div></div><span class="badge">PAPER · TESTNET · ORDENS BLOQUEADAS</span></header>
+<header><div><h1>MaxIncome 2.0</h1><div class="muted">Monitoramento e análise de mercado</div></div><span class="badge">PAPER · MAINNET · ORDENS BLOQUEADAS</span></header>
 <main>
 <section class="card"><h3>Conexão</h3><div id="connection" class="big warn">Conectando...</div><div id="updated" class="muted">Aguardando primeira leitura</div></section>
 <section class="card"><h3>Carteira Bybit</h3><div class="big">Saldo protegido</div><div class="muted">Os dados privados da carteira não são expostos no painel público. A conexão e os dados de mercado são monitorados normalmente.</div></section>
 <section class="card wide"><h3>Análise dos ativos</h3><table><thead><tr><th>Ativo</th><th>Preço</th><th>Variação 24h</th><th>Sinal</th><th>SMA 9 / 21</th></tr></thead><tbody id="assets"><tr><td colspan="5">Carregando...</td></tr></tbody></table></section>
 <section class="card"><h3>Proteção dos XRP antigos</h3><div id="legacy" class="big">6 XRP reservados</div><div id="botxrp" class="muted">Saldo disponível do robô: --</div><p class="muted">O motor não envia ordens de compra ou venda nesta etapa.</p></section>
-<section class="card"><h3>Controles</h3><button id="refresh">Atualizar agora</button><p class="muted">Esta versão é somente leitura e análise. Não existe botão de negociação.</p></section>
+<section class="card"><h3>Controles</h3><button id="refresh">Atualizar agora</button><p class="muted">Esta versão é somente leitura e análise. Não existe botão de negociação.</p><div id="risk-limits" class="muted">Carregando limites de risco...</div></section>
 <section class="card wide"><h3>Registro do sistema</h3><pre id="log">Aguardando...</pre></section>
 </main>
 <script>
@@ -37,6 +37,8 @@ async function refresh(){
     document.getElementById('connection').className='big '+(s.connected?'good':'bad');
     document.getElementById('updated').textContent='Atualizado: '+(s.updatedAt?new Date(s.updatedAt).toLocaleString('pt-BR'):'--')+' · '+s.environment;
     document.getElementById('legacy').textContent=fmt(s.legacyXrpReserved,4)+' XRP reservados';
+    const rl=s.riskLimits||{};
+    document.getElementById('risk-limits').textContent=rl.maxRiskBRL?`Limites PAPER: risco/operação R$ ${fmt(rl.maxRiskBRL,2)} · perda diária R$ ${fmt(rl.maxDailyLossBRL,2)} · ${rl.maxTradesPerDay} operações/dia · exposição R$ ${fmt(rl.maxExposureBRL,2)} · stop ${fmt(rl.stopLossPct,2)}% / alvo ${fmt(rl.takeProfitPct,2)}%. Execução bloqueada.`:'Limites de risco indisponíveis.';
     document.getElementById('botxrp').textContent='Saldo da carteira protegido; reserva configurada: '+fmt(s.legacyXrpReserved,4)+' XRP. Não negociável nesta etapa.';
     document.getElementById('assets').innerHTML=Object.entries(s.assets||{}).map(([sym,a])=>`<tr><td>${sym}</td><td>${a.error?'--':fmt(a.lastPrice,6)}</td><td>${a.error?'--':fmt(a.change24h,2)+'%'}</td><td class="${a.signal==='BULLISH'?'good':a.signal==='BEARISH'?'bad':'warn'}">${a.error?'ERRO':a.signal}</td><td>${a.error?'--':fmt(a.sma9,6)+' / '+fmt(a.sma21,6)}</td></tr>`).join('');
     document.getElementById('log').textContent=(s.log||[]).join('\\n');
