@@ -14,10 +14,19 @@ const port = Number(process.env.PORT || 10000);
 const assets = (process.env.ASSETS || 'XRPUSDT,BTCUSDT,ETHUSDT,SOLUSDT')
   .split(',').map(x => x.trim().toUpperCase()).filter(Boolean);
 
+const bybitEnvironment = (
+  process.env.BYBIT_ENV ||
+  (process.env.BYBIT_TESTNET === 'false' ? 'mainnet' : 'testnet')
+).toLowerCase();
+
+if (!['mainnet', 'testnet'].includes(bybitEnvironment)) {
+  throw new Error('BYBIT_ENV deve ser mainnet ou testnet.');
+}
+
 const client = new BybitClient({
   apiKey: process.env.BYBIT_API_KEY || '',
   apiSecret: process.env.BYBIT_SECRET_KEY || '',
-  testnet: process.env.BYBIT_TESTNET !== 'false'
+  testnet: bybitEnvironment === 'testnet'
 });
 const engine = new TradingEngine({
   client,
@@ -26,7 +35,14 @@ const engine = new TradingEngine({
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'MaxIncome', mode: 'paper', timestamp: new Date().toISOString() });
+  res.json({
+    ok: true,
+    service: 'MaxIncome',
+    mode: 'paper',
+    bybitEnvironment,
+    orderExecutionEnabled: false,
+    timestamp: new Date().toISOString()
+  });
 });
 
 app.get('/api/status', (_req, res) => {
@@ -54,7 +70,7 @@ app.get('/api/balance', async (_req, res) => {
 app.get('*', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(port, '0.0.0.0', async () => {
-  console.log(`MaxIncome disponível na porta ${port}. Modo PAPER.`);
+  console.log(`MaxIncome disponível na porta ${port}. Modo PAPER. Bybit: ${bybitEnvironment}.`);
   try { await engine.runOnce(); } catch (e) { console.error('[Inicialização]', e.message); }
   const interval = Math.max(15000, Number(process.env.ENGINE_INTERVAL_MS || 30000));
   setInterval(() => engine.runOnce().catch(e => console.error('[Motor]', e.message)), interval);
