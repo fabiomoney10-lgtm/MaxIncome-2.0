@@ -68,6 +68,7 @@ class TradingEngine {
     return {
       ...this.state,
       legacyXrpReserved: this.risk.legacyXrpReserved,
+      riskLimits: this.risk.getLimits(),
       botXrpAvailable: b ? this.risk.availableBotXrp(b.XRP.walletBalance) : null
     };
   }
