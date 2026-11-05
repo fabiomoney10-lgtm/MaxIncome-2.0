@@ -34,14 +34,20 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'MaxIncome', mode: 'paper', bybitEnvironment, orderExecutionEnabled: false, timestamp: new Date().toISOString() });
 });
 
+function getPublicStatus() {
+  const status = engine.getStatus();
+  const { balance, botXrpAvailable, ...publicStatus } = status;
+  return { ...publicStatus, balanceAvailable: Boolean(balance) };
+}
+
 app.get('/api/status', (_req, res) => {
-  res.json(engine.getStatus());
+  res.json(getPublicStatus());
 });
 
 app.get('/api/refresh', async (_req, res) => {
   try {
     await engine.runOnce();
-    res.json(engine.getStatus());
+    res.json(getPublicStatus());
   } catch (err) {
     res.status(502).json({ error: 'Falha ao atualizar dados', detail: err.message });
   }
