@@ -74,7 +74,7 @@ class PaperTrader {
           if (!(tradeFx > 0)) continue;
           const gross = (price - Number(trade.entry_price)) * Number(trade.quantity) * tradeFx;
           const entryFee = Number(trade.estimated_entry_fee_brl);
-          const exitFee = price * Number(trade.quantity) * tradeFx * this.feeRatePerSide;
+          const exitFee = price * Number(trade.quantity) * tradeFx * Number(settings.fee_rate_per_side);
           const fees = entryFee + exitFee;
           const net = gross - fees;
           await client.query(
@@ -105,7 +105,7 @@ class PaperTrader {
             const last = Number(market[position.symbol] && market[position.symbol].lastPrice);
             const positionFx = Number((position.metadata && position.metadata.fxUsdBrl) || fx);
             if (Number.isFinite(last) && last > 0 && positionFx > 0) {
-              unrealized += (last - Number(position.entry_price)) * Number(position.quantity) * positionFx - Number(position.estimated_entry_fee_brl) - (last * Number(position.quantity) * positionFx * this.feeRatePerSide);
+              unrealized += (last - Number(position.entry_price)) * Number(position.quantity) * positionFx - Number(position.estimated_entry_fee_brl) - (last * Number(position.quantity) * positionFx * Number(settings.fee_rate_per_side));
             }
           }
           await client.query('UPDATE public.paper_daily_state SET unrealized_pnl_brl=$1, updated_at=now() WHERE trading_date=$2',[unrealized,day]);
@@ -132,13 +132,13 @@ class PaperTrader {
             const requestedRisk = Math.min(Number(settings.max_risk_per_trade_brl), Number(settings.initial_capital_brl) * 0.01);
             const riskLimitedQty = requestedRisk / riskPerUnitBrl;
             const remainingExposure = Math.max(0, Number(settings.max_exposure_brl) - openExposure);
-            const remainingCapital = Math.max(0, Number(settings.initial_capital_brl) - openExposure);
+            const equity = Number(settings.initial_capital_brl) + Number(state.realized_pnl_brl) + unrealized;\n            const remainingCapital = Math.max(0, equity - openExposure);
             const maxNotional = Math.min(remainingExposure, remainingCapital);
             const qty = Math.min(riskLimitedQty, maxNotional / (entry * fx));
             const notional = qty * entry * fx;
             const actualRisk = qty * riskPerUnitBrl;
             if (!(qty > 0) || actualRisk > Number(settings.max_risk_per_trade_brl) + 0.01 || notional < 10) continue;
-            const takeProfit = entry + (entry - stop) * 2 + entry * feePct;
+            const minimumNetTwoToOneMove = 2 * (stopPct + feePct) + feePct;\n            const configuredTargetMove = Number(settings.take_profit_pct) / 100;\n            const takeProfit = entry * (1 + Math.max(configuredTargetMove, minimumNetTwoToOneMove));
             const entryFee = notional * Number(settings.fee_rate_per_side);
             const exitFee = notional * Number(settings.fee_rate_per_side);
             const idempotency = 'paper:' + String(day) + ':' + symbol + ':' + String(Number(state.trades_opened) + 1);
