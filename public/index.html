@@ -18,7 +18,7 @@ pre{white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;co
 </style>
 </head>
 <body>
-<header><div><h1>MaxIncome 2.0</h1><div class="muted">Monitoramento e análise de mercado</div></div><span class="badge">PAPER · MAINNET · ORDENS BLOQUEADAS</span></header>
+<header><div><h1>MaxIncome 2.0</h1><div class="muted">Monitoramento e análise de mercado</div></div><span id="environment-badge" class="badge">PAPER · ORDENS BLOQUEADAS</span></header>
 <main>
 <section class="card"><h3>Conexão</h3><div id="connection" class="big warn">Conectando...</div><div id="updated" class="muted">Aguardando primeira leitura</div></section>
 <section class="card"><h3>Carteira Bybit</h3><div class="big">Saldo protegido</div><div class="muted">Os dados privados da carteira não são expostos no painel público. A conexão e os dados de mercado são monitorados normalmente.</div></section>
@@ -36,6 +36,7 @@ async function refresh(){
     document.getElementById('connection').textContent=s.connected?'Conectado':'Desconectado';
     document.getElementById('connection').className='big '+(s.connected?'good':'bad');
     document.getElementById('updated').textContent='Atualizado: '+(s.updatedAt?new Date(s.updatedAt).toLocaleString('pt-BR'):'--')+' · '+s.environment;
+    document.getElementById('environment-badge').textContent='PAPER · '+(String(s.environment||'').includes('MAINNET')?'MAINNET':'TESTNET')+' · ORDENS BLOQUEADAS';
     document.getElementById('legacy').textContent=fmt(s.legacyXrpReserved,4)+' XRP reservados';
     const rl=s.riskLimits||{};
     document.getElementById('risk-limits').textContent=rl.maxRiskBRL?`Limites PAPER: risco/operação R$ ${fmt(rl.maxRiskBRL,2)} · perda diária R$ ${fmt(rl.maxDailyLossBRL,2)} · ${rl.maxTradesPerDay} operações/dia · exposição R$ ${fmt(rl.maxExposureBRL,2)} · stop ${fmt(rl.stopLossPct,2)}% / alvo ${fmt(rl.takeProfitPct,2)}%. Execução bloqueada.`:'Limites de risco indisponíveis.';
