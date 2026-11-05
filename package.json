@@ -2,7 +2,7 @@
   "name": "maxincome-2",
   "version": "2.0.0",
   "private": true,
-  "description": "MaxIncome - monitoramento Bybit e gerenciamento de risco PAPER",
+  "description": "MaxIncome 2.0 - persistent PAPER trading simulator",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,6 +11,7 @@
   },
   "engines": { "node": ">=18" },
   "dependencies": {
-    "express": "^4.21.2"
+    "express": "4.21.2",
+    "pg": "8.16.3"
   }
 }
