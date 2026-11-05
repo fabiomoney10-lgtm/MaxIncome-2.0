@@ -6,7 +6,7 @@ class TradingEngine {
   constructor({ client, assets, legacyXrpReserved, maxRiskBRL, maxDailyLossBRL, maxTradesPerDay, maxExposureBRL, stopLossPct, takeProfitPct }) {
     this.client=client; this.assets=assets;
     this.risk=new RiskManager({legacyXrpReserved,maxRiskBRL,maxDailyLossBRL,maxTradesPerDay,maxExposureBRL,stopLossPct,takeProfitPct});
-    this.state={mode:'PAPER',environment:client.environment==='mainnet'?'BYBIT MAINNET':'BYBIT TESTNET',updatedAt:null,connected:false,balance:null,assets:{},log:['Sistema iniciado em PAPER. Nenhuma ordem será enviada à corretora.'],error:null};
+    this.state={mode:'PAPER',environment:client.tradingEnvironment||client.environment,marketDataEnvironment:client.marketDataEnvironment||'BYBIT MAINNET',orderExecutionEnabled:false,updatedAt:null,connected:false,balance:null,assets:{},log:['Sistema iniciado em PAPER. Nenhuma ordem será enviada à corretora.'],error:null};
     this.running=false;
   }
   addLog(message){this.state.log.unshift('['+new Date().toLocaleString('pt-BR')+'] '+message);this.state.log=this.state.log.slice(0,30);}
@@ -25,7 +25,7 @@ class TradingEngine {
       this.state.connected=rows.some(([,v])=>Number.isFinite(Number(v.lastPrice)));
       this.state.updatedAt=new Date().toISOString();
       this.state.error=this.state.connected?null:'Nenhum ativo retornou dados válidos.';
-      this.addLog('Dados públicos de mercado atualizados. Ambiente: '+this.client.environment+'. Ordens reais bloqueadas.');
+      this.addLog('Dados públicos: '+(this.client.marketDataEnvironment||'BYBIT MAINNET')+'. Ambiente privado configurado: '+(this.client.tradingEnvironment||this.client.environment)+'. PAPER ativo; ordens reais bloqueadas.');
       if(!this.state.connected)throw new Error(this.state.error);
     }catch(err){this.state.connected=false;this.state.error=err.message;this.addLog('Falha de sincronização: '+err.message);throw err;}
     finally{this.running=false;}
