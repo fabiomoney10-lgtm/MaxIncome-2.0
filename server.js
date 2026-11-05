@@ -47,8 +47,10 @@ app.get('/api/paper/status',async(_req,res)=>{
  catch(e){res.status(503).json({error:'Não foi possível ler o estado PAPER.',detail:e.message});}
 });
 app.get('/api/refresh',async(_req,res)=>{
- try{await runCycle();res.json({...publicStatus(),paper:await paperTrader.getStatus()});}
- catch(e){res.status(503).json({error:'Motor PAPER bloqueado ou indisponível.',detail:e.message,databaseConnected:Boolean(pool&&!databaseError),orderExecutionEnabled:false});}
+ try{
+  if(!paperTrader)return res.status(503).json({error:databaseError||'Banco não configurado.',databaseConnected:false,orderExecutionEnabled:false});
+  res.json({...publicStatus(),paper:await paperTrader.getStatus()});
+ }catch(e){res.status(503).json({error:'Estado PAPER indisponível.',detail:e.message,databaseConnected:false,orderExecutionEnabled:false});}
 });
 app.get('/api/balance',async(req,res)=>{
  const expected=process.env.MAXINCOME_READ_TOKEN||'';
