@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -18,7 +19,7 @@ pre{white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;co
 </style>
 </head>
 <body>
-<header><div><h1>MaxIncome 2.0</h1><div class="muted">Monitoramento e análise de mercado</div></div><span class="badge">PAPER · TESTNET · ORDENS BLOQUEADAS</span></header>
+<header><div><h1>MaxIncome 2.0</h1><div class="muted">Monitoramento e análise de mercado</div></div><span class="badge">PAPER · MAINNET · ORDENS BLOQUEADAS</span></header>
 <main>
 <section class="card"><h3>Conexão</h3><div id="connection" class="big warn">Conectando...</div><div id="updated" class="muted">Aguardando primeira leitura</div></section>
 <section class="card"><h3>Carteira Bybit</h3><div class="big">Saldo protegido</div><div class="muted">Os dados privados da carteira não são expostos no painel público. A conexão e os dados de mercado são monitorados normalmente.</div></section>
@@ -39,10 +40,11 @@ async function refresh(){
     document.getElementById('legacy').textContent=fmt(s.legacyXrpReserved,4)+' XRP reservados';
     document.getElementById('botxrp').textContent='Saldo da carteira protegido; reserva configurada: '+fmt(s.legacyXrpReserved,4)+' XRP. Não negociável nesta etapa.';
     document.getElementById('assets').innerHTML=Object.entries(s.assets||{}).map(([sym,a])=>`<tr><td>${sym}</td><td>${a.error?'--':fmt(a.lastPrice,6)}</td><td>${a.error?'--':fmt(a.change24h,2)+'%'}</td><td class="${a.signal==='BULLISH'?'good':a.signal==='BEARISH'?'bad':'warn'}">${a.error?'ERRO':a.signal}</td><td>${a.error?'--':fmt(a.sma9,6)+' / '+fmt(a.sma21,6)}</td></tr>`).join('');
-    document.getElementById('log').textContent=(s.log||[]).join('\\n');
+    document.getElementById('log').textContent=(s.log||[]).join('\n');
   }catch(e){document.getElementById('connection').textContent='Falha: '+e.message;document.getElementById('connection').className='big bad';}
   finally{btn.disabled=false;}
 }
 document.getElementById('refresh').addEventListener('click',refresh);refresh();setInterval(refresh,15000);
 </script>
-</body></html>
+</body>
+</html>
