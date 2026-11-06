@@ -61,7 +61,7 @@ test('daily risk calculation rejects invalid limits',()=>{
 
 test('unit risk includes stop loss, round-trip fees and a slippage buffer',()=>{
  const risk=calculateRiskPerUnitBRL({entryPrice:100,fxRate:5,stopLossPct:1,feeRatePerSide:0.001});
- assert.equal(risk,7.25);
+ assert.ok(Math.abs(risk-7.25)<1e-9);
 });
 
 test('unit risk rejects invalid prices and rates',()=>{
