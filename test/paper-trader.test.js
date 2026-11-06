@@ -4,6 +4,7 @@ const assert=require('node:assert/strict');
 const {createPool}=require('../src/paper-trader');
 const {RiskManager}=require('../src/risk-manager');
 const {analyzeCandles}=require('../src/strategy');
+const {getTradingDate,calculateAvailableDailyRisk,calculateRiskPerUnitBRL}=require('../src/risk-guards');
 
 test('fails closed when DATABASE_URL is absent',()=>assert.throws(()=>createPool(''),/DATABASE_URL não configurada/));
 test('risk limits expose PAPER-only controls and never enable exchange execution',()=>{
@@ -22,7 +23,6 @@ test('risk manager never authorizes a real Bybit order',()=>{
  const risk=new RiskManager();
  assert.equal(risk.evaluate({signal:'BULLISH',usdtBalance:100}).allowed,false);
 });
-
 
 test('Bybit reports public market data and private environment separately',()=>{
  const {BybitClient}=require('../src/bybit');
@@ -43,4 +43,27 @@ test('trading engine status clearly identifies PAPER and blocks real execution',
  assert.equal(status.environment,'BYBIT TESTNET');
  assert.equal(status.marketDataEnvironment,'BYBIT MAINNET');
  assert.equal(status.orderExecutionEnabled,false);
+});
+
+test('trading date follows Sao Paulo midnight, not UTC midnight',()=>{
+ assert.equal(getTradingDate(new Date('2026-11-07T02:30:00.000Z')),'2026-11-06');
+ assert.equal(getTradingDate(new Date('2026-11-07T03:30:00.000Z')),'2026-11-07');
+});
+
+test('daily risk budget reserves open risk and current drawdown',()=>{
+ assert.equal(calculateAvailableDailyRisk({maxDailyLossBRL:100,realizedPnlBRL:-20,reservedOpenRiskBRL:40}),40);
+ assert.equal(calculateAvailableDailyRisk({maxDailyLossBRL:100,realizedPnlBRL:-80,reservedOpenRiskBRL:30}),0);
+});
+
+test('daily risk calculation rejects invalid limits',()=>{
+ assert.throws(()=>calculateAvailableDailyRisk({maxDailyLossBRL:0}),/Parâmetros inválidos/);
+});
+
+test('unit risk includes stop loss, round-trip fees and a slippage buffer',()=>{
+ const risk=calculateRiskPerUnitBRL({entryPrice:100,fxRate:5,stopLossPct:1,feeRatePerSide:0.001});
+ assert.ok(Math.abs(risk-7.25)<1e-9);
+});
+
+test('unit risk rejects invalid prices and rates',()=>{
+ assert.throws(()=>calculateRiskPerUnitBRL({entryPrice:0,fxRate:5,stopLossPct:1,feeRatePerSide:0.001}),/Parâmetros inválidos/);
 });

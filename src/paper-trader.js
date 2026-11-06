@@ -3,16 +3,12 @@
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
+const { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require('./risk-guards');
 
 function createPool(connectionString) {
   if (!connectionString) throw new Error('DATABASE_URL não configurada; motor PAPER permanece bloqueado.');
-  // Supabase signs its PostgreSQL/pooler certificates with its own root CA.
-  // Remove URL SSL flags because node-postgres would otherwise override this
-  // explicit CA configuration when parsing DATABASE_URL.
   const parsedUrl = new URL(connectionString);
-  for (const key of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey']) {
-    parsedUrl.searchParams.delete(key);
-  }
+  for (const key of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey']) parsedUrl.searchParams.delete(key);
   const ca = fs.readFileSync(path.join(__dirname, '..', 'certs', 'prod-ca-2021.crt'), 'utf8');
   return new Pool({
     connectionString: parsedUrl.toString(),
@@ -60,8 +56,7 @@ class PaperTrader {
         const settingsResult = await client.query('SELECT * FROM public.paper_settings WHERE id = 1 FOR UPDATE');
         if (!settingsResult.rows.length) throw new Error('Configuração PAPER ausente.');
         const settings = settingsResult.rows[0];
-        const dateResult = await client.query("SELECT (now() AT TIME ZONE 'UTC')::date AS day");
-        const day = dateResult.rows[0].day;
+        const day = getTradingDate();
         await client.query(
           'INSERT INTO public.paper_daily_state (trading_date, starting_balance_brl) VALUES ($1, $2) ON CONFLICT (trading_date) DO NOTHING',
           [day, settings.initial_capital_brl]
@@ -127,10 +122,19 @@ class PaperTrader {
           await client.query("INSERT INTO public.paper_events(event_type,message,details) VALUES ('DAILY_HALT','Motor PAPER pausado pelo limite diário.', $1)", [JSON.stringify({ dailyLoss })]);
         }
 
-        // The database switch is authoritative: monitoring/closing existing positions continues,
-        // but no new PAPER position is opened while trading_enabled is false.
+        // Reserve the full modeled risk of every open position against the daily loss budget.
+        const openRiskResult = await client.query("SELECT COALESCE(sum(risk_brl + CASE WHEN COALESCE(metadata->>'slippageBufferPct','') = '' THEN entry_value_brl * 0.0025 ELSE 0 END),0) AS reserved_risk FROM public.paper_trades WHERE status='OPEN'");
+        const reservedOpenRisk = Number(openRiskResult.rows[0].reserved_risk || 0);
+        const availableDailyRisk = calculateAvailableDailyRisk({
+          maxDailyLossBRL: Number(settings.max_daily_loss_brl),
+          realizedPnlBRL: Number(state.realized_pnl_brl),
+          unrealizedPnlBRL: unrealized,
+          reservedOpenRiskBRL: reservedOpenRisk
+        });
+
+        // The database switch is authoritative; no new position is opened while disabled.
         const tradingEnabled = settings.trading_enabled === true;
-        if (fx && tradingEnabled && !halted && Number(state.trades_opened) < Number(settings.max_trades_per_day)) {
+        if (fx && tradingEnabled && !halted && availableDailyRisk > 0 && Number(state.trades_opened) < Number(settings.max_trades_per_day)) {
           for (const symbol of this.assets) {
             const ticker = market[symbol];
             if (!ticker || ticker.signal !== 'BULLISH' || !Number.isFinite(Number(ticker.lastPrice))) continue;
@@ -140,9 +144,9 @@ class PaperTrader {
             const stop = entry * (1 - Number(settings.stop_loss_pct) / 100);
             const stopPct = Number(settings.stop_loss_pct) / 100;
             const feePct = Number(settings.fee_rate_per_side) * 2;
-            const riskPerUnitBrl = entry * fx * (stopPct + feePct);
+            const riskPerUnitBrl = calculateRiskPerUnitBRL({ entryPrice: entry, fxRate: fx, stopLossPct: Number(settings.stop_loss_pct), feeRatePerSide: Number(settings.fee_rate_per_side) });
             if (!(riskPerUnitBrl > 0)) continue;
-            const requestedRisk = Math.min(Number(settings.max_risk_per_trade_brl), Number(settings.initial_capital_brl) * 0.01);
+            const requestedRisk = Math.min(Number(settings.max_risk_per_trade_brl), Number(settings.initial_capital_brl) * 0.01, availableDailyRisk);
             const riskLimitedQty = requestedRisk / riskPerUnitBrl;
             const remainingExposure = Math.max(0, Number(settings.max_exposure_brl) - openExposure);
             const equity = Number(settings.initial_capital_brl) + Number(state.realized_pnl_brl) + unrealized;
@@ -151,8 +155,8 @@ class PaperTrader {
             const qty = Math.min(riskLimitedQty, maxNotional / (entry * fx));
             const notional = qty * entry * fx;
             const actualRisk = qty * riskPerUnitBrl;
-            if (!(qty > 0) || actualRisk > Number(settings.max_risk_per_trade_brl) + 0.01 || notional < 10) continue;
-            const minimumNetTwoToOneMove = 2 * (stopPct + feePct) + feePct;
+            if (!(qty > 0) || actualRisk > requestedRisk + 0.01 || notional < 10) continue;
+            const minimumNetTwoToOneMove = 2 * (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT / 100 + feePct) + feePct;
             const configuredTargetMove = Number(settings.take_profit_pct) / 100;
             const takeProfit = entry * (1 + Math.max(configuredTargetMove, minimumNetTwoToOneMove));
             const entryFee = notional * Number(settings.fee_rate_per_side);
@@ -160,7 +164,7 @@ class PaperTrader {
             const idempotency = 'paper:' + String(day) + ':' + symbol + ':' + String(Number(state.trades_opened) + 1);
             const inserted = await client.query(
               "INSERT INTO public.paper_trades (symbol,quantity,entry_price,stop_price,take_profit_price,entry_value_brl,risk_brl,estimated_entry_fee_brl,estimated_exit_fee_brl,idempotency_key,metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id",
-              [symbol, qty, entry, stop, takeProfit, notional, actualRisk, entryFee, exitFee, idempotency, JSON.stringify({ fxUsdBrl: fx, fxSource: 'Frankfurter USD/BRL; USDT tratado como aproximação de USD', signal: ticker.signal })]
+              [symbol, qty, entry, stop, takeProfit, notional, actualRisk, entryFee, exitFee, idempotency, JSON.stringify({ fxUsdBrl: fx, fxSource: 'Frankfurter USD/BRL; USDT tratado como aproximação de USD', slippageBufferPct: DEFAULT_STOP_SLIPPAGE_BUFFER_PCT, signal: ticker.signal })]
             );
             if (!inserted.rowCount) continue;
             await client.query(
@@ -171,7 +175,7 @@ class PaperTrader {
               "INSERT INTO public.paper_events(trade_id,event_type,symbol,message,details) VALUES ($1,'TRADE_OPENED',$2,'Posição simulada aberta; nenhuma ordem enviada à Bybit.',$3)",
               [inserted.rows[0].id, symbol, JSON.stringify({ entry, stop, takeProfit, qty, notional, riskBrl: actualRisk, fx })]
             );
-            break; // one new position per engine cycle
+            break;
           }
         }
         await client.query('COMMIT');
@@ -193,23 +197,40 @@ class PaperTrader {
   }
 
   async getStatus() {
-    const [settings, daily, open, recent, events] = await Promise.all([
+    const day = getTradingDate();
+    const [settings, daily, open, recent, events, reserved] = await Promise.all([
       this.pool.query('SELECT initial_capital_brl,max_risk_per_trade_brl,max_daily_loss_brl,max_trades_per_day,max_exposure_brl,stop_loss_pct,take_profit_pct,fee_rate_per_side,trading_enabled FROM public.paper_settings WHERE id=1'),
-      this.pool.query("SELECT * FROM public.paper_daily_state WHERE trading_date=(now() AT TIME ZONE 'UTC')::date"),
+      this.pool.query('SELECT * FROM public.paper_daily_state WHERE trading_date=$1',[day]),
       this.pool.query("SELECT id,symbol,quantity,entry_price,stop_price,take_profit_price,entry_value_brl,risk_brl,opened_at FROM public.paper_trades WHERE status='OPEN' ORDER BY opened_at DESC"),
       this.pool.query("SELECT id,symbol,quantity,entry_price,exit_price,exit_reason,pnl_net_brl,status,opened_at,closed_at FROM public.paper_trades ORDER BY opened_at DESC LIMIT 20"),
-      this.pool.query("SELECT event_type,symbol,message,created_at FROM public.paper_events ORDER BY created_at DESC LIMIT 20")
+      this.pool.query("SELECT event_type,symbol,message,created_at FROM public.paper_events ORDER BY created_at DESC LIMIT 20"),
+      this.pool.query("SELECT COALESCE(sum(risk_brl + CASE WHEN COALESCE(metadata->>'slippageBufferPct','') = '' THEN entry_value_brl * 0.0025 ELSE 0 END),0) AS reserved_risk FROM public.paper_trades WHERE status='OPEN'")
     ]);
+    const cfg = settings.rows[0] || {};
+    const state = daily.rows[0] || {};
+    const reservedOpenRisk = Number(reserved.rows[0]?.reserved_risk || 0);
+    const dailyRiskAvailable = cfg.max_daily_loss_brl
+      ? calculateAvailableDailyRisk({
+          maxDailyLossBRL: Number(cfg.max_daily_loss_brl),
+          realizedPnlBRL: Number(state.realized_pnl_brl || 0),
+          unrealizedPnlBRL: Number(state.unrealized_pnl_brl || 0),
+          reservedOpenRiskBRL: reservedOpenRisk
+        })
+      : 0;
     return {
-      enabled: settings.rows[0]?.trading_enabled === true,
+      enabled: cfg.trading_enabled === true,
       mode: 'PAPER',
       orderExecutionEnabled: false,
+      tradingDate: day,
+      tradingDateTimezone: 'America/Sao_Paulo',
       fxUsdBrl: this.lastFx,
       fxDescription: 'USDT aproximado por USD; câmbio indicativo, não cotação de execução',
       lastRunAt: this.lastRunAt,
       error: this.lastError,
-      settings: settings.rows[0] || null,
-      daily: daily.rows[0] || null,
+      dailyRiskReservedBRL: reservedOpenRisk,
+      dailyRiskAvailableBRL: dailyRiskAvailable,
+      settings: cfg,
+      daily: state,
       openPositions: open.rows,
       recentTrades: recent.rows,
       events: events.rows
