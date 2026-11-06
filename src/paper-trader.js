@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
-const { getTradingDate, calculateAvailableDailyRisk } = require('./risk-guards');
+const { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require('./risk-guards');
 
 function createPool(connectionString) {
   if (!connectionString) throw new Error('DATABASE_URL não configurada; motor PAPER permanece bloqueado.');
@@ -144,7 +144,7 @@ class PaperTrader {
             const stop = entry * (1 - Number(settings.stop_loss_pct) / 100);
             const stopPct = Number(settings.stop_loss_pct) / 100;
             const feePct = Number(settings.fee_rate_per_side) * 2;
-            const riskPerUnitBrl = entry * fx * (stopPct + feePct);
+            const riskPerUnitBrl = calculateRiskPerUnitBRL({ entryPrice: entry, fxRate: fx, stopLossPct: Number(settings.stop_loss_pct), feeRatePerSide: Number(settings.fee_rate_per_side) });
             if (!(riskPerUnitBrl > 0)) continue;
             const requestedRisk = Math.min(Number(settings.max_risk_per_trade_brl), Number(settings.initial_capital_brl) * 0.01, availableDailyRisk);
             const riskLimitedQty = requestedRisk / riskPerUnitBrl;
@@ -156,7 +156,7 @@ class PaperTrader {
             const notional = qty * entry * fx;
             const actualRisk = qty * riskPerUnitBrl;
             if (!(qty > 0) || actualRisk > requestedRisk + 0.01 || notional < 10) continue;
-            const minimumNetTwoToOneMove = 2 * (stopPct + feePct) + feePct;
+            const minimumNetTwoToOneMove = 2 * (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT / 100 + feePct) + feePct;
             const configuredTargetMove = Number(settings.take_profit_pct) / 100;
             const takeProfit = entry * (1 + Math.max(configuredTargetMove, minimumNetTwoToOneMove));
             const entryFee = notional * Number(settings.fee_rate_per_side);
@@ -164,7 +164,7 @@ class PaperTrader {
             const idempotency = 'paper:' + String(day) + ':' + symbol + ':' + String(Number(state.trades_opened) + 1);
             const inserted = await client.query(
               "INSERT INTO public.paper_trades (symbol,quantity,entry_price,stop_price,take_profit_price,entry_value_brl,risk_brl,estimated_entry_fee_brl,estimated_exit_fee_brl,idempotency_key,metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id",
-              [symbol, qty, entry, stop, takeProfit, notional, actualRisk, entryFee, exitFee, idempotency, JSON.stringify({ fxUsdBrl: fx, fxSource: 'Frankfurter USD/BRL; USDT tratado como aproximação de USD', signal: ticker.signal })]
+              [symbol, qty, entry, stop, takeProfit, notional, actualRisk, entryFee, exitFee, idempotency, JSON.stringify({ fxUsdBrl: fx, fxSource: 'Frankfurter USD/BRL; USDT tratado como aproximação de USD', slippageBufferPct: DEFAULT_STOP_SLIPPAGE_BUFFER_PCT, signal: ticker.signal })]
             );
             if (!inserted.rowCount) continue;
             await client.query(
