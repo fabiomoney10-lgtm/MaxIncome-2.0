@@ -1,5 +1,7 @@
 'use strict';
 
+const DEFAULT_STOP_SLIPPAGE_BUFFER_PCT = 0.25;
+
 function getTradingDate(date = new Date()) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     throw new TypeError('Data inválida para calcular o dia de negociação.');
@@ -24,4 +26,13 @@ function calculateAvailableDailyRisk({ maxDailyLossBRL, realizedPnlBRL = 0, unre
   return Math.max(0, limit - currentDrawdown - reserved);
 }
 
-module.exports = { getTradingDate, calculateAvailableDailyRisk };
+function calculateRiskPerUnitBRL({ entryPrice, fxRate, stopLossPct, feeRatePerSide, slippageBufferPct = DEFAULT_STOP_SLIPPAGE_BUFFER_PCT }) {
+  const values = [entryPrice, fxRate, stopLossPct, feeRatePerSide, slippageBufferPct].map(Number);
+  if (values.some(value => !Number.isFinite(value)) || values[0] <= 0 || values[1] <= 0 || values[2] <= 0 || values[3] < 0 || values[4] < 0) {
+    throw new TypeError('Parâmetros inválidos para estimar o risco unitário.');
+  }
+  const [entry, fx, stopPct, fee, slippage] = values;
+  return entry * fx * ((stopPct + slippage) / 100 + fee * 2);
+}
+
+module.exports = { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT };
