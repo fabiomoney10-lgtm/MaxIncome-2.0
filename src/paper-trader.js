@@ -123,7 +123,7 @@ class PaperTrader {
         }
 
         // Reserve the full modeled risk of every open position against the daily loss budget.
-        const openRiskResult = await client.query("SELECT COALESCE(sum(risk_brl),0) AS reserved_risk FROM public.paper_trades WHERE status='OPEN'");
+        const openRiskResult = await client.query("SELECT COALESCE(sum(risk_brl + CASE WHEN COALESCE(metadata->>'slippageBufferPct','') = '' THEN entry_value_brl * 0.0025 ELSE 0 END),0) AS reserved_risk FROM public.paper_trades WHERE status='OPEN'");
         const reservedOpenRisk = Number(openRiskResult.rows[0].reserved_risk || 0);
         const availableDailyRisk = calculateAvailableDailyRisk({
           maxDailyLossBRL: Number(settings.max_daily_loss_brl),
@@ -204,7 +204,7 @@ class PaperTrader {
       this.pool.query("SELECT id,symbol,quantity,entry_price,stop_price,take_profit_price,entry_value_brl,risk_brl,opened_at FROM public.paper_trades WHERE status='OPEN' ORDER BY opened_at DESC"),
       this.pool.query("SELECT id,symbol,quantity,entry_price,exit_price,exit_reason,pnl_net_brl,status,opened_at,closed_at FROM public.paper_trades ORDER BY opened_at DESC LIMIT 20"),
       this.pool.query("SELECT event_type,symbol,message,created_at FROM public.paper_events ORDER BY created_at DESC LIMIT 20"),
-      this.pool.query("SELECT COALESCE(sum(risk_brl),0) AS reserved_risk FROM public.paper_trades WHERE status='OPEN'")
+      this.pool.query("SELECT COALESCE(sum(risk_brl + CASE WHEN COALESCE(metadata->>'slippageBufferPct','') = '' THEN entry_value_brl * 0.0025 ELSE 0 END),0) AS reserved_risk FROM public.paper_trades WHERE status='OPEN'")
     ]);
     const cfg = settings.rows[0] || {};
     const state = daily.rows[0] || {};
