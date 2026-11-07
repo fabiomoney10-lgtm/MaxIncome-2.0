@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MaxIncome 2.0 · Swing Trade</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;padding:24px;background:#101722;color:#e8edf5;font:15px Arial,sans-serif}
+main{max-width:1100px;margin:auto}header{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+h1{color:#f0b90b}.card{background:#1b2635;border:1px solid #2d3b4d;border-radius:12px;padding:18px;margin:16px 0}
+.muted{color:#aab6c5}input{background:#101722;color:#fff;border:1px solid #526176;border-radius:7px;padding:10px;width:min(100%,340px)}
+button{background:#f0b90b;border:0;border-radius:7px;padding:10px 14px;font-weight:bold;cursor:pointer}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #344256;vertical-align:top}
+.good{color:#52d6a0}.warn{color:#ffd166}.bad{color:#ff7777}.score{font-weight:bold;font-size:20px}
+</style></head><body><main>
+<header><div><h1>MaxIncome 2.0 · Swing Trade</h1><div class="muted">Scanner independente · candles 4h e diário · somente PAPER/análise</div></div><a href="/" style="color:#f0b90b">Voltar ao painel principal</a></header>
+<section class="card">
+<strong>Proteção do painel</strong><p class="muted">Use o mesmo token privado configurado como MAXINCOME_READ_TOKEN no Render. Ele fica somente nesta sessão do navegador.</p>
+<input id="token" type="password" autocomplete="off" placeholder="Token privado de leitura"> <button id="connect">Conectar / Atualizar</button>
+<p id="status" class="muted">Aguardando conexão.</p>
+</section>
+<section class="card"><h2>O que o motor analisa</h2><p class="muted">Tendência diária, tendência de 4 horas, rompimento de 20 candles, pullback na média de 20 períodos e força relativa entre os ativos monitorados. Score é uma pontuação de confluência, não probabilidade nem garantia de lucro.</p><p class="muted">Sinais BUY_CANDIDATE são candidatos para estudo. Stops e alvos são referências matemáticas indicativas; nenhuma posição é aberta.</p></section>
+<section class="card"><h2>Oportunidades monitoradas</h2><table><thead><tr><th>Ativo</th><th>Score</th><th>Sinal</th><th>Preço</th><th>Stop indicativo</th><th>Alvo indicativo</th><th>Justificativa</th></tr></thead><tbody id="rows"><tr><td colspan="7">Conecte para carregar.</td></tr></tbody></table></section>
+<section class="card"><div id="meta" class="muted">Motor aguardando primeira análise.</div></section>
+</main><script>
+const key='maxincome_read_token';
+const token=document.getElementById('token');token.value=sessionStorage.getItem(key)||'';
+const fmt=v=>Number.isFinite(Number(v))?Number(v).toLocaleString('pt-BR',{maximumFractionDigits:8}):'--';
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function load(){
+ const value=token.value.trim();if(!value){document.getElementById('status').textContent='Informe o token de leitura.';return;}
+ sessionStorage.setItem(key,value);
+ const status=document.getElementById('status');status.textContent='Consultando scanner...';
+ try{
+  const response=await fetch('/api/swing/status',{headers:{Authorization:'Bearer '+value}});
+  const data=await response.json();if(!response.ok)throw new Error(data.error||'Falha na consulta');
+  const entries=Object.entries(data.assets||{});
+  document.getElementById('rows').innerHTML=entries.map(([symbol,a])=>'<tr><td>'+esc(symbol)+'</td><td class="score">'+esc(a.score)+'/100</td><td class="'+(a.signal==='BUY_CANDIDATE'?'good':a.signal==='WAIT'?'warn':'bad')+'">'+esc(a.signal)+'</td><td>'+fmt(a.lastPrice)+'</td><td>'+fmt(a.indicativeStopPrice)+'</td><td>'+fmt(a.indicativeTargetPrice)+'</td><td>'+esc(a.reason)+'</td></tr>').join('')||'<tr><td colspan="7">Sem ativos disponíveis.</td></tr>';
+  document.getElementById('meta').textContent='Última análise: '+(data.lastRunAt?new Date(data.lastRunAt).toLocaleString('pt-BR'):'--')+' · Intervalo: '+Math.round(data.intervalMs/60000)+' min · Estratégias: '+data.strategy.join(', ')+' · Execução de ordens: DESABILITADA · Posições PAPER: DESABILITADAS';
+  status.textContent=data.lastError?'Aviso: '+data.lastError:'Conectado. Scanner ativo; somente análise.';
+ }catch(e){status.textContent='Acesso/consulta indisponível: '+e.message;}
+}
+document.getElementById('connect').addEventListener('click',load);load();setInterval(load,60000);
+</script></body></html>
