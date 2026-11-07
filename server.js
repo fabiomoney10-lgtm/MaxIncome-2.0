@@ -49,7 +49,7 @@ function publicStatus(){
 }
 function requireReadToken(req,res,next){
  const expected=process.env.MAXINCOME_READ_TOKEN||'';
- const supplied=(req.get('authorization')||'').replace(/^Bearer\\s+/i,'');
+ const supplied=(req.get('authorization')||'').replace(/^Bearer\s+/i,'');
  if(!expected)return res.status(503).json({error:'Acesso privado não configurado. Defina MAXINCOME_READ_TOKEN no Render.'});
  const a=Buffer.from(expected),b=Buffer.from(supplied);
  if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return res.status(401).json({error:'Acesso não autorizado.'});
