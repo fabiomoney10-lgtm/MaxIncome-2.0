@@ -52,7 +52,7 @@ async function load(){
    ['Operações no dia',(daily.trades_opened||0)+'/'+(cfg.max_trades_per_day||5)]
   ].map(([label,value])=>'<div class="metric">'+esc(label)+'<strong>'+value+'</strong></div>').join('');
   document.getElementById('risk').textContent='Orçamento global compartilhado: capital '+money(cfg.initial_capital_brl)+' · limite diário '+money(cfg.max_daily_loss_brl)+' · exposição máxima '+money(cfg.max_exposure_brl)+' · câmbio indicativo '+fmt(paper.fxUsdBrl)+' BRL/USD. Dia São Paulo: '+esc(paper.tradingDate||'--')+'.';
-  document.getElementById('meta').textContent='Último scanner: '+(data.lastRunAt?new Date(data.lastRunAt).toLocaleString('pt-BR'):'--')+' · Último ciclo PAPER: '+(paper.lastRunAt?new Date(paper.lastRunAt).toLocaleString('pt-BR'):'--')+' · Intervalo: '+Math.round(data.intervalMs/60000)+' min · Execução de ordens externas: DESABILITADA.';
+  document.getElementById('meta').textContent='Último scanner: '+(data.lastRunAt?new Date(data.lastRunAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',hour12:false}):'--')+' · Último ciclo PAPER: '+(paper.lastRunAt?new Date(paper.lastRunAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',hour12:false}):'--')+' · Fuso: São Paulo (UTC−3) · Intervalo: '+Math.round(data.intervalMs/60000)+' min · Execução de ordens externas: DESABILITADA.';
   status.textContent=paper.lastError?'Aviso: '+paper.lastError:(paper.enabled?'Conectado. Swing PAPER habilitado.':'Conectado. Scanner ativo; novas posições bloqueadas pelo interruptor PAPER global (trading_enabled=false).');
  }catch(e){status.textContent='Acesso/consulta indisponível: '+e.message;}
 }
