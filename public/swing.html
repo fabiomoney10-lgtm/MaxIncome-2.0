@@ -44,7 +44,7 @@ async function load(){
   document.getElementById('open').innerHTML=(paper.openPositions||[]).map(t=>'<tr><td>'+esc(t.symbol)+'</td><td>'+fmt(t.quantity)+'</td><td>'+fmt(t.entry_price)+'</td><td>'+fmt(t.stop_price)+'</td><td>'+fmt(t.take_profit_price)+'</td><td>'+money(t.risk_brl)+'</td><td>'+esc(t.metadata?.score??'--')+'</td></tr>').join('')||'<tr><td colspan="7">Nenhuma posição Swing aberta.</td></tr>';
   document.getElementById('history').innerHTML=(paper.recentTrades||[]).map(t=>'<tr><td>'+esc(t.symbol)+'</td><td>'+esc(t.status)+'</td><td>'+fmt(t.entry_price)+'</td><td>'+fmt(t.exit_price)+'</td><td>'+money(t.pnl_net_brl)+'</td><td>'+esc(t.exit_reason||'--')+'</td></tr>').join('')||'<tr><td colspan="6">Nenhuma operação Swing registrada.</td></tr>';
   document.getElementById('metrics').innerHTML=[
-   ['Motor',paper.enabled?'HABILITADO':'PAUSADO'],
+   ['Novas posições Swing',paper.enabled?'HABILITADAS':'PAUSADAS'],
    ['Posições abertas',(paper.openPositions||[]).length+'/'+esc(paper.maxOpenPositions)],
    ['Risco por posição',money(paper.riskPerTradeCapBRL)],
    ['Risco diário reservado',money(paper.dailyRiskReservedBRL)],
