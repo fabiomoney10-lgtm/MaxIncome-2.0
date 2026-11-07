@@ -5,6 +5,7 @@ const crypto=require('crypto');
 const {BybitClient}=require('./src/bybit');
 const {TradingEngine}=require('./src/trading-engine');
 const {SwingEngine}=require('./src/swing-engine');
+const {SwingPaperTrader}=require('./src/swing-paper-trader');
 const {createPool,PaperTrader}=require('./src/paper-trader');
 
 const app=express();
@@ -24,12 +25,13 @@ const engine=new TradingEngine({
 });
 const swingIntervalMs=Math.max(60000,Number(process.env.SWING_INTERVAL_MS||300000));
 const swingEngine=new SwingEngine({client,assets,intervalMs:swingIntervalMs});
-let pool=null,paperTrader=null,databaseError=null;
+let pool=null,paperTrader=null,swingPaperTrader=null,databaseError=null;
 const engineLoop={running:false,lastStartedAt:null,lastSuccessAt:null,lastError:null};
 const swingLoop={running:false,lastStartedAt:null,lastSuccessAt:null,lastError:null};
 try{
  pool=createPool(process.env.DATABASE_URL||'');
  paperTrader=new PaperTrader({pool,assets,stopLossPct:process.env.PAPER_STOP_LOSS_PCT||1,feeRatePerSide:process.env.PAPER_FEE_RATE_PER_SIDE||0.001});
+ swingPaperTrader=new SwingPaperTrader({pool,fxProvider:()=>paperTrader.getFxRate()});
 }catch(e){databaseError=e.message;}
 async function runCycle(){
  if(engineLoop.running)return;
@@ -52,6 +54,8 @@ async function runSwingCycle(){
  swingLoop.lastStartedAt=new Date().toISOString();
  try{
   await swingEngine.runOnce();
+  if(!swingPaperTrader)throw new Error(databaseError||'Banco PAPER não configurado.');
+  await swingPaperTrader.runOnce(swingEngine.getStatus().assets||{});
   swingLoop.lastSuccessAt=new Date().toISOString();
   swingLoop.lastError=null;
  }catch(e){
@@ -86,11 +90,16 @@ app.get('/api/paper/status',requireReadToken,async(_req,res)=>{
  try{if(!paperTrader)return res.status(503).json({error:databaseError||'Banco não configurado.'});res.json(await paperTrader.getStatus());}
  catch(e){res.status(503).json({error:'Não foi possível ler o estado PAPER.',detail:e.message});}
 });
-app.get('/api/swing/status',requireReadToken,(_req,res)=>res.json(swingEngine.getStatus()));
+app.get('/api/swing/status',requireReadToken,async(_req,res)=>{
+ try{
+  if(!swingPaperTrader)return res.status(503).json({error:databaseError||'Banco PAPER não configurado.'});
+  res.json({...swingEngine.getStatus(),paper:await swingPaperTrader.getStatus()});
+ }catch(e){res.status(503).json({error:'Estado Swing PAPER indisponível.',detail:e.message});}
+});
 app.get('/api/refresh',requireReadToken,async(_req,res)=>{
  try{
   if(!paperTrader)return res.status(503).json({error:databaseError||'Banco não configurado.',databaseConnected:false,orderExecutionEnabled:false});
-  res.json({...publicStatus(),paper:await paperTrader.getStatus(),swing:swingEngine.getStatus()});
+  res.json({...publicStatus(),paper:await paperTrader.getStatus(),swing:{...swingEngine.getStatus(),paper:await swingPaperTrader.getStatus()}});
  }catch(e){res.status(503).json({error:'Estado PAPER indisponível.',detail:e.message,databaseConnected:false,orderExecutionEnabled:false});}
 });
 app.get('/api/balance',requireReadToken,async(_req,res)=>{
