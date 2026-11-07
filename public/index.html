@@ -48,10 +48,7 @@ async function refresh(){
   document.getElementById('assets').innerHTML=Object.entries(s.assets||{}).map(([sym,a])=>'<tr><td>'+safe(sym)+'</td><td>'+(a.error?'--':num(a.lastPrice))+'</td><td>'+(a.error?'--':num(a.change24h,2)+'%')+'</td><td class="'+(a.signal==='BULLISH'?'good':a.signal==='BEARISH'?'bad':'warn')+'">'+safe(a.error?'ERRO':a.signal)+'</td><td>'+(a.error?'--':num(a.sma9)+' / '+num(a.sma21))+'</td></tr>').join('')||'<tr><td colspan="5">Sem dados</td></tr>';
   document.getElementById('open').innerHTML=(p.openPositions||[]).map(t=>'<tr><td>'+safe(t.symbol)+'</td><td>'+num(t.quantity,8)+'</td><td>'+num(t.entry_price)+'</td><td>'+num(t.stop_price)+'</td><td>'+num(t.take_profit_price)+'</td><td>'+money(t.risk_brl)+'</td></tr>').join('')||'<tr><td colspan="6">Nenhuma posição aberta</td></tr>';
   document.getElementById('history').innerHTML=(p.recentTrades||[]).map(t=>'<tr><td>'+safe(t.symbol)+'</td><td>'+safe(t.status)+'</td><td>'+num(t.entry_price)+'</td><td>'+num(t.exit_price)+'</td><td>'+money(t.pnl_net_brl)+'</td><td>'+safe(t.exit_reason||'--')+'</td></tr>').join('')||'<tr><td colspan="6">Nenhuma operação registrada</td></tr>';
-  document.getElementById('log').textContent=(s.log||[]).join('
-')+'
-FX USD/BRL indicativo: '+num(p.fxUsdBrl,4)+'
-'+(p.error||'');
+  document.getElementById('log').textContent=(s.log||[]).join('\\n')+'\\nFX USD/BRL indicativo: '+num(p.fxUsdBrl,4)+'\\n'+(p.error||'');
  }catch(e){
   document.getElementById('market').textContent='Bloqueado: '+e.message;document.getElementById('market').className='big bad';
   document.getElementById('database').textContent='Indisponível';document.getElementById('database').className='big bad';
