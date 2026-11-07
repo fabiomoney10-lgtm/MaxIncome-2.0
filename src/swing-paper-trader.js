@@ -43,7 +43,8 @@ function sizeSwingPosition({
   const remainingExposure = Math.max(0, maxExposure - openExposureBRL);
   const requestedRisk = Math.min(maxRiskPerTradeBRL, availableDailyRiskBRL);
   const riskLimitedQuantity = requestedRisk / riskPerUnitBRL;
-  const maxNotional = Math.min(remainingExposure, capital);
+  const remainingCapital = Math.max(0, capital - openExposureBRL);
+  const maxNotional = Math.min(remainingExposure, remainingCapital);
   const quantity = Math.min(riskLimitedQuantity, maxNotional / (entry * fx));
   const entryValueBRL = quantity * entry * fx;
   const riskBRL = quantity * riskPerUnitBRL;
