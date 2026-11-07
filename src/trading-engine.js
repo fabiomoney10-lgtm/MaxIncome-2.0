@@ -9,7 +9,7 @@ class TradingEngine {
     this.state={mode:'PAPER',environment:client.tradingEnvironment||client.environment,marketDataEnvironment:client.marketDataEnvironment||'BYBIT MAINNET',orderExecutionEnabled:false,updatedAt:null,connected:false,balance:null,assets:{},log:['Sistema iniciado em PAPER. Nenhuma ordem será enviada à corretora.'],error:null};
     this.running=false;
   }
-  addLog(message){this.state.log.unshift('['+new Date().toLocaleString('pt-BR')+'] '+message);this.state.log=this.state.log.slice(0,30);}
+  addLog(message){this.state.log.unshift('['+new Date().toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',hour12:false})+'] '+message);this.state.log=this.state.log.slice(0,30);}
   async runOnce(){
     if(this.running)return;
     this.running=true;
