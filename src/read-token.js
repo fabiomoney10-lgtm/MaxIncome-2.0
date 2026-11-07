@@ -4,7 +4,9 @@ const crypto = require('crypto');
 function createReadTokenMiddleware(getExpectedToken = () => process.env.MAXINCOME_READ_TOKEN || '') {
   return function requireReadToken(req, res, next) {
     const expected = String(getExpectedToken() || '');
-    const supplied = String(req.get('authorization') || '').replace(/^Bearer\\s+/i, '');
+    const authorization = String(req.get('authorization') || '');
+    const bearerMatch = authorization.match(/^Bearer\\s+(.+)$/i);
+    const supplied = bearerMatch ? bearerMatch[1] : '';
     if (!expected) {
       return res.status(503).json({ error: 'Acesso privado não configurado. Defina MAXINCOME_READ_TOKEN no Render.' });
     }
