@@ -5,7 +5,7 @@ function createReadTokenMiddleware(getExpectedToken = () => process.env.MAXINCOM
   return function requireReadToken(req, res, next) {
     const expected = String(getExpectedToken() || '');
     const authorization = String(req.get('authorization') || '');
-    const bearerMatch = authorization.match(/^Bearer\\s+(.+)$/i);
+    const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i);
     const supplied = bearerMatch ? bearerMatch[1] : '';
     if (!expected) {
       return res.status(503).json({ error: 'Acesso privado não configurado. Defina MAXINCOME_READ_TOKEN no Render.' });
