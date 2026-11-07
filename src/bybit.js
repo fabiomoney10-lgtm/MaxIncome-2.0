@@ -100,10 +100,20 @@ class BybitClient {
             'GET', '/v5/market/kline',
             { category: 'spot', symbol, interval, limit }
         );
+        const intervalMinutes = Number(interval);
+        if (!Number.isFinite(intervalMinutes) || intervalMinutes <= 0) {
+            throw new Error(`Intervalo de candles inválido: ${interval}`);
+        }
+        const intervalMs = intervalMinutes * 60 * 1000;
+        const now = Date.now();
         return (result.list || []).map(row => ({
             start: Number(row[0]),
             close: Number(row[4])
-        })).reverse();
+        })).reverse().filter(candle =>
+            Number.isFinite(candle.start) &&
+            Number.isFinite(candle.close) &&
+            candle.start + intervalMs <= now
+        );
     }
 
     async getWalletBalance() {
