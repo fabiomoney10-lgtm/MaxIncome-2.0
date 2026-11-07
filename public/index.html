@@ -9,7 +9,7 @@ main{margin-top:22px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
 .card{background:#1b2635;border:1px solid #2d3b4d;border-radius:12px;padding:18px;min-width:0}.wide{grid-column:1/-1}
 .muted{color:#aab6c5}.big{font-size:25px;font-weight:bold;margin:8px 0}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:9px;border-bottom:1px solid #344256}
 .good{color:#52d6a0}.warn{color:#ffd166}.bad{color:#ff7777}button{background:#f0b90b;border:0;border-radius:7px;padding:10px 14px;font-weight:bold;cursor:pointer}
-pre{white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto;color:#9fe6c6}
+pre{white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto;color:#9fe6c6}input{background:#101722;color:#e8edf5;border:1px solid #526176;border-radius:7px;padding:10px;width:min(100%,320px);margin:6px 6px 6px 0}
 @media(max-width:700px){main{grid-template-columns:1fr}.wide{grid-column:auto}}
 </style></head><body>
 <header><div><h1>MaxIncome 2.0</h1><div class="muted">Simulador de operações • dados públicos de mercado</div></div><span id="badge" class="badge">PAPER · ORDENS REAIS DESABILITADAS</span></header>
@@ -21,17 +21,17 @@ pre{white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto;co
 <section class="card wide"><h3>Análise dos ativos</h3><table><thead><tr><th>Ativo</th><th>Preço</th><th>Variação 24h</th><th>Sinal</th><th>SMA 9 / 21</th></tr></thead><tbody id="assets"><tr><td colspan="5">Carregando...</td></tr></tbody></table></section>
 <section class="card wide"><h3>Posições PAPER abertas</h3><table><thead><tr><th>Ativo</th><th>Quantidade</th><th>Entrada</th><th>Stop</th><th>Alvo</th><th>Risco (R$)</th></tr></thead><tbody id="open"><tr><td colspan="6">Carregando...</td></tr></tbody></table></section>
 <section class="card wide"><h3>Histórico de operações</h3><table><thead><tr><th>Ativo</th><th>Status</th><th>Entrada</th><th>Saída</th><th>Resultado líquido</th><th>Motivo</th></tr></thead><tbody id="history"><tr><td colspan="6">Carregando...</td></tr></tbody></table></section>
-<section class="card"><h3>Motor</h3><button id="refresh">Atualizar agora</button><p class="muted">O simulador não envia ordens à Bybit, não movimenta saldo real e permanece em PAPER.</p></section>
+<section class="card"><h3>Motor</h3><label for="readToken" class="muted">Token privado de leitura</label><input id="readToken" type="password" autocomplete="off" placeholder="Informe MAXINCOME_READ_TOKEN"><button id="saveToken">Conectar</button> <button id="refresh">Atualizar agora</button><p class="muted">O token fica somente nesta sessão do navegador. O simulador não envia ordens à Bybit, não movimenta saldo real e permanece em PAPER.</p></section>
 <section class="card"><h3>Registro</h3><pre id="log">Aguardando...</pre></section>
 </main>
 <script>
 const money=v=>Number.isFinite(Number(v))?'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'--';
 const num=(v,d=6)=>Number.isFinite(Number(v))?Number(v).toFixed(d):'--';
 const safe=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-async function refresh(){
+const readTokenKey='maxincome_read_token';\ndocument.getElementById('readToken').value=sessionStorage.getItem(readTokenKey)||'';\nasync function refresh(){
  const btn=document.getElementById('refresh');btn.disabled=true;
  try{
-  const r=await fetch('/api/refresh');const s=await r.json();if(!r.ok)throw new Error(s.detail||s.error||'Falha');
+  const token=sessionStorage.getItem(readTokenKey)||'';const r=await fetch('/api/refresh',{headers:token?{Authorization:'Bearer '+token}:{}});const s=await r.json();if(!r.ok)throw new Error(s.detail||s.error||'Falha');
   const p=s.paper||{};const d=p.daily||{};const cfg=p.settings||{};
   document.getElementById('market').textContent=s.connected?'Mercado online':'Mercado indisponível';
   document.getElementById('market').className='big '+(s.connected?'good':'bad');
@@ -54,5 +54,5 @@ async function refresh(){
  }
  finally{btn.disabled=false;}
 }
-document.getElementById('refresh').addEventListener('click',refresh);refresh();setInterval(refresh,30000);
+document.getElementById('saveToken').addEventListener('click',()=>{const token=document.getElementById('readToken').value.trim();if(token)sessionStorage.setItem(readTokenKey,token);else sessionStorage.removeItem(readTokenKey);refresh();});\ndocument.getElementById('refresh').addEventListener('click',refresh);refresh();setInterval(refresh,30000);
 </script></body></html>
