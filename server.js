@@ -47,6 +47,14 @@ function publicStatus(){
  const {balance,botXrpAvailable,...safe}=s;
  return {...safe,balanceAvailable:false};
 }
+function requireReadToken(req,res,next){
+ const expected=process.env.MAXINCOME_READ_TOKEN||'';
+ const supplied=(req.get('authorization')||'').replace(/^Bearer\s+/i,'');
+ if(!expected)return res.status(503).json({error:'Acesso privado não configurado. Defina MAXINCOME_READ_TOKEN no Render.'});
+ const a=Buffer.from(expected),b=Buffer.from(supplied);
+ if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return res.status(401).json({error:'Acesso não autorizado.'});
+ return next();
+}
 app.get('/api/health',async(_req,res)=>{
  let db=false;
  try{if(pool){await pool.query('SELECT 1');db=true;}}catch(e){databaseError=e.message;}
@@ -56,21 +64,17 @@ app.get('/api/health',async(_req,res)=>{
  res.status(ok?200:503).json({ok,service:'MaxIncome',mode:'PAPER',bybitEnvironment,marketDataEnvironment:'BYBIT MAINNET',marketConnected,databaseConnected:db,engineLoop:{...engineLoop},orderExecutionEnabled:false,databaseError:db?null:databaseError,timestamp:new Date().toISOString()});
 });
 app.get('/api/status',(_req,res)=>res.json(publicStatus()));
-app.get('/api/paper/status',async(_req,res)=>{
+app.get('/api/paper/status',requireReadToken,async(_req,res)=>{
  try{if(!paperTrader)return res.status(503).json({error:databaseError||'Banco não configurado.'});res.json(await paperTrader.getStatus());}
  catch(e){res.status(503).json({error:'Não foi possível ler o estado PAPER.',detail:e.message});}
 });
-app.get('/api/refresh',async(_req,res)=>{
+app.get('/api/refresh',requireReadToken,async(_req,res)=>{
  try{
   if(!paperTrader)return res.status(503).json({error:databaseError||'Banco não configurado.',databaseConnected:false,orderExecutionEnabled:false});
   res.json({...publicStatus(),paper:await paperTrader.getStatus()});
  }catch(e){res.status(503).json({error:'Estado PAPER indisponível.',detail:e.message,databaseConnected:false,orderExecutionEnabled:false});}
 });
-app.get('/api/balance',async(req,res)=>{
- const expected=process.env.MAXINCOME_READ_TOKEN||'';
- const supplied=(req.get('authorization')||'').replace(/^Bearer\\s+/i,'');
- const a=Buffer.from(expected),b=Buffer.from(supplied);
- if(!expected||a.length!==b.length||!crypto.timingSafeEqual(a,b))return res.status(401).json({error:'Acesso não autorizado.'});
+app.get('/api/balance',requireReadToken,async(_req,res)=>{
  return res.status(410).json({error:'Consulta privada de carteira desativada no simulador PAPER.'});
 });
 app.get('*',(_req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
