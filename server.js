@@ -4,6 +4,7 @@ const path=require('path');
 const crypto=require('crypto');
 const {BybitClient}=require('./src/bybit');
 const {TradingEngine}=require('./src/trading-engine');
+const {SwingEngine}=require('./src/swing-engine');
 const {createPool,PaperTrader}=require('./src/paper-trader');
 
 const app=express();
@@ -21,8 +22,11 @@ const engine=new TradingEngine({
  maxTradesPerDay:process.env.MAX_TRADES_PER_DAY||5,maxExposureBRL:process.env.MAX_EXPOSURE_BRL||5000,
  stopLossPct:process.env.PAPER_STOP_LOSS_PCT||1,takeProfitPct:process.env.PAPER_TAKE_PROFIT_PCT||2
 });
+const swingIntervalMs=Math.max(60000,Number(process.env.SWING_INTERVAL_MS||300000));
+const swingEngine=new SwingEngine({client,assets,intervalMs:swingIntervalMs});
 let pool=null,paperTrader=null,databaseError=null;
 const engineLoop={running:false,lastStartedAt:null,lastSuccessAt:null,lastError:null};
+const swingLoop={running:false,lastStartedAt:null,lastSuccessAt:null,lastError:null};
 try{
  pool=createPool(process.env.DATABASE_URL||'');
  paperTrader=new PaperTrader({pool,assets,stopLossPct:process.env.PAPER_STOP_LOSS_PCT||1,feeRatePerSide:process.env.PAPER_FEE_RATE_PER_SIDE||0.001});
@@ -42,6 +46,19 @@ async function runCycle(){
   throw e;
  }finally{engineLoop.running=false;}
 }
+async function runSwingCycle(){
+ if(swingLoop.running)return;
+ swingLoop.running=true;
+ swingLoop.lastStartedAt=new Date().toISOString();
+ try{
+  await swingEngine.runOnce();
+  swingLoop.lastSuccessAt=new Date().toISOString();
+  swingLoop.lastError=null;
+ }catch(e){
+  swingLoop.lastError=e.message;
+  throw e;
+ }finally{swingLoop.running=false;}
+}
 function publicStatus(){
  const s=engine.getStatus();
  const {balance,botXrpAvailable,...safe}=s;
@@ -60,18 +77,20 @@ app.get('/api/health',async(_req,res)=>{
  try{if(pool){await pool.query('SELECT 1');db=true;}}catch(e){databaseError=e.message;}
  const marketConnected=engine.getStatus().connected;
  const cycleFresh=!!engineLoop.lastSuccessAt&&(Date.now()-Date.parse(engineLoop.lastSuccessAt)<120000);
- const ok=db&&marketConnected&&cycleFresh&&!engineLoop.lastError;
- res.status(ok?200:503).json({ok,service:'MaxIncome',mode:'PAPER',bybitEnvironment,marketDataEnvironment:'BYBIT MAINNET',marketConnected,databaseConnected:db,engineLoop:{...engineLoop},orderExecutionEnabled:false,databaseError:db?null:databaseError,timestamp:new Date().toISOString()});
+ const swingFresh=!!swingLoop.lastSuccessAt&&(Date.now()-Date.parse(swingLoop.lastSuccessAt)<swingIntervalMs*3);
+ const ok=db&&marketConnected&&cycleFresh&&swingFresh&&!engineLoop.lastError&&!swingLoop.lastError;
+ res.status(ok?200:503).json({ok,service:'MaxIncome',mode:'PAPER',bybitEnvironment,marketDataEnvironment:'BYBIT MAINNET',marketConnected,databaseConnected:db,engineLoop:{...engineLoop},swingLoop:{...swingLoop},orderExecutionEnabled:false,databaseError:db?null:databaseError,timestamp:new Date().toISOString()});
 });
 app.get('/api/status',(_req,res)=>res.json(publicStatus()));
 app.get('/api/paper/status',requireReadToken,async(_req,res)=>{
  try{if(!paperTrader)return res.status(503).json({error:databaseError||'Banco não configurado.'});res.json(await paperTrader.getStatus());}
  catch(e){res.status(503).json({error:'Não foi possível ler o estado PAPER.',detail:e.message});}
 });
+app.get('/api/swing/status',requireReadToken,(_req,res)=>res.json(swingEngine.getStatus()));
 app.get('/api/refresh',requireReadToken,async(_req,res)=>{
  try{
   if(!paperTrader)return res.status(503).json({error:databaseError||'Banco não configurado.',databaseConnected:false,orderExecutionEnabled:false});
-  res.json({...publicStatus(),paper:await paperTrader.getStatus()});
+  res.json({...publicStatus(),paper:await paperTrader.getStatus(),swing:swingEngine.getStatus()});
  }catch(e){res.status(503).json({error:'Estado PAPER indisponível.',detail:e.message,databaseConnected:false,orderExecutionEnabled:false});}
 });
 app.get('/api/balance',requireReadToken,async(_req,res)=>{
@@ -81,7 +100,9 @@ app.get('*',(_req,res)=>res.sendFile(path.join(__dirname,'public','index.html'))
 app.listen(port,'0.0.0.0',async()=>{
  console.log('MaxIncome 2.0 iniciado em PAPER. Execução real desabilitada.');
  const interval=Math.max(15000,Number(process.env.ENGINE_INTERVAL_MS||30000));
- const cycle=async()=>{try{await runCycle();}catch(e){console.error('[Motor PAPER]',e.message);}};
- await cycle();
+ const cycle=async()=>{try{await runCycle();}catch(e){console.error('[Motor Day Trade PAPER]',e.message);}};
+ const swingCycle=async()=>{try{await runSwingCycle();}catch(e){console.error('[Motor Swing PAPER]',e.message);}};
+ await Promise.all([cycle(),swingCycle()]);
  setInterval(cycle,interval);
+ setInterval(swingCycle,swingIntervalMs);
 });
