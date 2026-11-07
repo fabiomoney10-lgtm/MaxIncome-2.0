@@ -28,7 +28,9 @@ pre{white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto;co
 const money=v=>Number.isFinite(Number(v))?'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'--';
 const num=(v,d=6)=>Number.isFinite(Number(v))?Number(v).toFixed(d):'--';
 const safe=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const readTokenKey='maxincome_read_token';\ndocument.getElementById('readToken').value=sessionStorage.getItem(readTokenKey)||'';\nasync function refresh(){
+const readTokenKey='maxincome_read_token';
+document.getElementById('readToken').value=sessionStorage.getItem(readTokenKey)||'';
+async function refresh(){
  const btn=document.getElementById('refresh');btn.disabled=true;
  try{
   const token=sessionStorage.getItem(readTokenKey)||'';const r=await fetch('/api/refresh',{headers:token?{Authorization:'Bearer '+token}:{}});const s=await r.json();if(!r.ok)throw new Error(s.detail||s.error||'Falha');
@@ -46,7 +48,10 @@ const readTokenKey='maxincome_read_token';\ndocument.getElementById('readToken')
   document.getElementById('assets').innerHTML=Object.entries(s.assets||{}).map(([sym,a])=>'<tr><td>'+safe(sym)+'</td><td>'+(a.error?'--':num(a.lastPrice))+'</td><td>'+(a.error?'--':num(a.change24h,2)+'%')+'</td><td class="'+(a.signal==='BULLISH'?'good':a.signal==='BEARISH'?'bad':'warn')+'">'+safe(a.error?'ERRO':a.signal)+'</td><td>'+(a.error?'--':num(a.sma9)+' / '+num(a.sma21))+'</td></tr>').join('')||'<tr><td colspan="5">Sem dados</td></tr>';
   document.getElementById('open').innerHTML=(p.openPositions||[]).map(t=>'<tr><td>'+safe(t.symbol)+'</td><td>'+num(t.quantity,8)+'</td><td>'+num(t.entry_price)+'</td><td>'+num(t.stop_price)+'</td><td>'+num(t.take_profit_price)+'</td><td>'+money(t.risk_brl)+'</td></tr>').join('')||'<tr><td colspan="6">Nenhuma posição aberta</td></tr>';
   document.getElementById('history').innerHTML=(p.recentTrades||[]).map(t=>'<tr><td>'+safe(t.symbol)+'</td><td>'+safe(t.status)+'</td><td>'+num(t.entry_price)+'</td><td>'+num(t.exit_price)+'</td><td>'+money(t.pnl_net_brl)+'</td><td>'+safe(t.exit_reason||'--')+'</td></tr>').join('')||'<tr><td colspan="6">Nenhuma operação registrada</td></tr>';
-  document.getElementById('log').textContent=(s.log||[]).join('\n')+'\nFX USD/BRL indicativo: '+num(p.fxUsdBrl,4)+'\n'+(p.error||'');
+  document.getElementById('log').textContent=(s.log||[]).join('
+')+'
+FX USD/BRL indicativo: '+num(p.fxUsdBrl,4)+'
+'+(p.error||'');
  }catch(e){
   document.getElementById('market').textContent='Bloqueado: '+e.message;document.getElementById('market').className='big bad';
   document.getElementById('database').textContent='Indisponível';document.getElementById('database').className='big bad';
@@ -54,5 +59,6 @@ const readTokenKey='maxincome_read_token';\ndocument.getElementById('readToken')
  }
  finally{btn.disabled=false;}
 }
-document.getElementById('saveToken').addEventListener('click',()=>{const token=document.getElementById('readToken').value.trim();if(token)sessionStorage.setItem(readTokenKey,token);else sessionStorage.removeItem(readTokenKey);refresh();});\ndocument.getElementById('refresh').addEventListener('click',refresh);refresh();setInterval(refresh,30000);
+document.getElementById('saveToken').addEventListener('click',()=>{const token=document.getElementById('readToken').value.trim();if(token)sessionStorage.setItem(readTokenKey,token);else sessionStorage.removeItem(readTokenKey);refresh();});
+document.getElementById('refresh').addEventListener('click',refresh);refresh();setInterval(refresh,30000);
 </script></body></html>
