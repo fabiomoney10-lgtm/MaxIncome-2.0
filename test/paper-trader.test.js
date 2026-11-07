@@ -67,3 +67,44 @@ test('unit risk includes stop loss, round-trip fees and a slippage buffer',()=>{
 test('unit risk rejects invalid prices and rates',()=>{
  assert.throws(()=>calculateRiskPerUnitBRL({entryPrice:0,fxRate:5,stopLossPct:1,feeRatePerSide:0.001}),/Parâmetros inválidos/);
 });
+
+
+test('Bybit getKlines excludes the currently forming candle',async()=>{
+ const {BybitClient}=require('../src/bybit');
+ const intervalMs=15*60*1000;
+ const currentStart=Math.floor(Date.now()/intervalMs)*intervalMs;
+ const closedStart=currentStart-intervalMs;
+ const originalFetch=global.fetch;
+ global.fetch=async()=>({
+  ok:true,status:200,
+  text:async()=>JSON.stringify({retCode:0,result:{list:[
+   [String(currentStart),'','','','999'],
+   [String(closedStart),'','','','100']
+  ]}})
+ });
+ try{
+  const client=new BybitClient({testnet:true});
+  const candles=await client.getKlines('BTCUSDT','15','60');
+  assert.deepEqual(candles.map(c=>c.start),[closedStart]);
+  assert.deepEqual(candles.map(c=>c.close),[100]);
+ }finally{global.fetch=originalFetch;}
+});
+
+test('trading engine keeps live ticker price separate from closed candle analysis',async()=>{
+ const {TradingEngine}=require('../src/trading-engine');
+ const candles=Array.from({length:21},(_,i)=>({start:i,close:i+1}));
+ const client={
+  environment:'BYBIT TESTNET',
+  tradingEnvironment:'BYBIT TESTNET',
+  marketDataEnvironment:'BYBIT MAINNET',
+  getTicker:async symbol=>({symbol,lastPrice:123.45,change24h:1.2}),
+  getKlines:async()=>candles
+ };
+ const engine=new TradingEngine({client,assets:['BTCUSDT']});
+ await engine.runOnce();
+ const asset=engine.getStatus().assets.BTCUSDT;
+ assert.equal(asset.lastPrice,123.45);
+ assert.equal(asset.candleClose,21);
+ assert.equal(asset.signal,'BULLISH');
+ assert.equal(asset.risk,undefined);
+});

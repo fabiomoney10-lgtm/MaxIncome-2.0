@@ -18,7 +18,9 @@ class TradingEngine {
         try{
           const [ticker,candles]=await Promise.all([this.client.getTicker(symbol),this.client.getKlines(symbol)]);
           const analysis=analyzeCandles(candles);
-          return [symbol,{...ticker,...analysis,risk:this.risk.evaluate({signal:analysis.signal,usdtBalance:null})}];
+          // Preserve the live ticker price for PAPER fills and position monitoring.
+          // Strategy indicators are calculated only from completed candles.
+          return [symbol,{...analysis,...ticker,candleClose:analysis.lastPrice}];
         }catch(err){return [symbol,{error:err.message,signal:'INSUFFICIENT_DATA'}];}
       }));
       this.state.assets=Object.fromEntries(rows);
