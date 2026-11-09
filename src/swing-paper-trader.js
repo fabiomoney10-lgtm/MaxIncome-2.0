@@ -4,6 +4,7 @@ const {
   getTradingDate,
   calculateAvailableDailyRisk,
   calculateRiskPerUnitBRL,
+  calculateMinimumTargetPct,
   DEFAULT_STOP_SLIPPAGE_BUFFER_PCT
 } = require('./risk-guards');
 
@@ -50,8 +51,12 @@ function sizeSwingPosition({
   const riskBRL = quantity * riskPerUnitBRL;
   if (!(quantity > 0) || !(entryValueBRL >= 10) || riskBRL > requestedRisk + 0.01) return null;
 
-  const feePct = fee * 2 * 100;
-  const minimumTargetPct = 2 * (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT + feePct) + feePct;
+  const roundTripFeesPct = fee * 200;
+  const minimumTargetPct = calculateMinimumTargetPct({
+    stopLossPct: stopPct,
+    feeRatePerSide: fee,
+    slippageBufferPct: DEFAULT_STOP_SLIPPAGE_BUFFER_PCT
+  });
   const targetPct = Math.max(SWING_TARGET_PCT, minimumTargetPct);
   return {
     quantity,
@@ -61,7 +66,8 @@ function sizeSwingPosition({
     entryValueBRL,
     riskBRL,
     targetPct,
-    riskReward: (targetPct - DEFAULT_STOP_SLIPPAGE_BUFFER_PCT - roundTripFeesPct) /\n      (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT + roundTripFeesPct)
+    riskReward: (targetPct - DEFAULT_STOP_SLIPPAGE_BUFFER_PCT - roundTripFeesPct) /
+      (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT + roundTripFeesPct)
   };
 }
 
