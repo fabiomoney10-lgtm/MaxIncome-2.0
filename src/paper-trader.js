@@ -142,8 +142,6 @@ class PaperTrader {
             if (alreadyOpen.rowCount) continue;
             const entry = Number(ticker.lastPrice);
             const stop = entry * (1 - Number(settings.stop_loss_pct) / 100);
-            const stopPct = Number(settings.stop_loss_pct) / 100;
-            const feePct = Number(settings.fee_rate_per_side) * 2;
             const riskPerUnitBrl = calculateRiskPerUnitBRL({ entryPrice: entry, fxRate: fx, stopLossPct: Number(settings.stop_loss_pct), feeRatePerSide: Number(settings.fee_rate_per_side) });
             if (!(riskPerUnitBrl > 0)) continue;
             const requestedRisk = Math.min(Number(settings.max_risk_per_trade_brl), Number(settings.initial_capital_brl) * 0.01, availableDailyRisk);
@@ -156,7 +154,11 @@ class PaperTrader {
             const notional = qty * entry * fx;
             const actualRisk = qty * riskPerUnitBrl;
             if (!(qty > 0) || actualRisk > requestedRisk + 0.01 || notional < 10) continue;
-            const minimumNetTwoToOneMove = 2 * (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT / 100 + feePct) + feePct;
+            const minimumNetTwoToOneMove = calculateMinimumTargetPct({
+              stopLossPct: Number(settings.stop_loss_pct),
+              feeRatePerSide: Number(settings.fee_rate_per_side),
+              slippageBufferPct: DEFAULT_STOP_SLIPPAGE_BUFFER_PCT
+            }) / 100;
             const configuredTargetMove = Number(settings.take_profit_pct) / 100;
             const takeProfit = entry * (1 + Math.max(configuredTargetMove, minimumNetTwoToOneMove));
             const entryFee = notional * Number(settings.fee_rate_per_side);
