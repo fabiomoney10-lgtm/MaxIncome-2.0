@@ -146,8 +146,12 @@ function runStrategyComparisonBacktest(candles, options = {}) {
   if (data.length < 110) {
     throw new TypeError('Comparação exige ao menos 110 candles: aquecimento de indicadores e amostra fora do treino.');
   }
-  const splitIndex = Math.floor(data.length * Number(options.trainRatio ?? 0.7));
-  if (!Number.isFinite(splitIndex) || splitIndex < 55 || splitIndex >= data.length - 5) {
+  const trainRatio = Number(options.trainRatio ?? 0.7);
+  if (!Number.isFinite(trainRatio) || trainRatio < 0.5 || trainRatio > 0.85) {
+    throw new TypeError('Divisão treino/teste inválida; use trainRatio entre 0.5 e 0.85.');
+  }
+  const splitIndex = Math.floor(data.length * trainRatio);
+  if (splitIndex < 55 || splitIndex >= data.length - 5) {
     throw new TypeError('Divisão treino/teste inválida; use trainRatio entre 0.5 e 0.85.');
   }
   const common = { ...options, startIndex: 54 };
@@ -163,7 +167,7 @@ function runStrategyComparisonBacktest(candles, options = {}) {
     executionEnabled: false,
     candleCount: data.length,
     split: {
-      trainRatio: Number(options.trainRatio ?? 0.7),
+      trainRatio,
       trainEndTime: data[splitIndex - 1].start,
       testStartTime: data[splitIndex].start,
       outOfSampleTradesAreEvaluatedSeparately: true
