@@ -234,6 +234,9 @@ class PaperTrader {
       tradingDateTimezone: 'America/Sao_Paulo',
       fxUsdBrl: this.lastFx,
       fxDescription: 'USDT aproximado por USD; câmbio indicativo, não cotação de execução',
+      minimumNetTargetPct: cfg.stop_loss_pct && cfg.fee_rate_per_side !== undefined
+        ? calculateMinimumTargetPct({ stopLossPct: Number(cfg.stop_loss_pct), feeRatePerSide: Number(cfg.fee_rate_per_side), slippageBufferPct: DEFAULT_STOP_SLIPPAGE_BUFFER_PCT })
+        : null,
       lastRunAt: this.lastRunAt,
       error: this.lastError,
       dailyRiskReservedBRL: reservedOpenRisk,
