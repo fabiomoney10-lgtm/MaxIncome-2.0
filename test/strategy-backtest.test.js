@@ -5,14 +5,14 @@ const { runStrategyComparisonBacktest, runOne } = require('../src/strategy-backt
 
 function risingCandles(length = 160) {
   return Array.from({ length }, (_, i) => {
-    const close = 100 + i * 0.3;
+    const close = 100 + i * 0.08 + Math.sin(i * 1.4) * 0.4;
     return {
       start: i * 900000,
-      open: close - 0.1,
-      high: close + 0.1,
-      low: close - 0.1,
+      open: close - 0.02,
+      high: close + 0.03,
+      low: close - 0.03,
       close,
-      volume: 100 + (i % 5) * 10
+      volume: 100 + (i % 3) * 20
     };
   });
 }
@@ -27,6 +27,8 @@ test('comparison reports independent in-sample and out-of-sample results without
   assert.equal(result.executionEnabled, false);
   assert.equal(result.candleCount, 160);
   assert.ok(result.split.testStartTime > result.split.trainEndTime);
+  assert.ok(result.results.TREND_FOLLOWING.outOfSample.metrics.trades > 0);
+  assert.ok(result.results.MOMENTUM.outOfSample.metrics.trades > 0);
   for (const name of ['TREND_FOLLOWING', 'MOMENTUM', 'MEAN_REVERSION']) {
     const item = result.results[name];
     assert.ok(item);
