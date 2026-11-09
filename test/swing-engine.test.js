@@ -51,3 +51,15 @@ test('SwingEngine fails closed when current ticker price is invalid',async()=>{
   await assert.rejects(engine.runOnce(),/Nenhum ativo retornou candles válidos/);
   assert.equal(engine.getStatus().assets.BTCUSDT.signal,'DATA_ERROR');
 });
+
+test('SwingEngine rejects short 4h or daily history instead of reporting a fresh analysis',async()=>{
+ const client={
+  getTicker:async symbol=>({symbol,lastPrice:200,marketTimestamp:Date.now()}),
+  getKlines:async(_symbol,interval)=>interval==='240'?risingCandles(49):risingCandles(60)
+ };
+ const engine=new SwingEngine({client,assets:['BTCUSDT']});
+ await assert.rejects(engine.runOnce(),/Nenhum ativo retornou candles válidos/);
+ assert.equal(engine.getStatus().assets.BTCUSDT.signal,'DATA_ERROR');
+ assert.match(engine.getStatus().assets.BTCUSDT.reason,/Histórico insuficiente/);
+ assert.equal(engine.getStatus().lastSuccessAt,null);
+});
