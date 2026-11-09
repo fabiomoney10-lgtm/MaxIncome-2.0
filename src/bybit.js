@@ -97,11 +97,24 @@ class BybitClient {
         const byStart = new Map();
         for (const row of (result.list || [])) {
             const start = Number(row && row[0]);
+            const open = Number(row && row[1]);
+            const high = Number(row && row[2]);
+            const low = Number(row && row[3]);
             const close = Number(row && row[4]);
+            const volume = Number(row && row[5]);
+            const turnover = Number(row && row[6]);
             const end = candleEndTime(start, normalizedInterval);
-            if (!Number.isFinite(start) || start <= 0 || !Number.isFinite(close) || close <= 0 ||
+            if (!Number.isFinite(start) || start <= 0 ||
+                ![open, high, low, close].every(Number.isFinite) ||
+                [open, high, low, close].some(value => value <= 0) ||
+                high < Math.max(open, close, low) || low > Math.min(open, close, high) ||
                 !Number.isFinite(end) || end > now) continue;
-            byStart.set(start, { start, close, isClosed: true });
+            byStart.set(start, {
+                start, open, high, low, close,
+                volume: Number.isFinite(volume) && volume >= 0 ? volume : null,
+                turnover: Number.isFinite(turnover) && turnover >= 0 ? turnover : null,
+                isClosed: true
+            });
         }
         return Array.from(byStart.values()).sort((a, b) => a.start - b.start);
     }
