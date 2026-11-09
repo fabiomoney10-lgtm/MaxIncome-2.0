@@ -90,6 +90,13 @@ class PaperTrader {
             'INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,$2,$3,$4,$5)',
             [trade.id, reason === 'STOP_LOSS' ? 'STOP_TRIGGERED' : 'TARGET_TRIGGERED', trade.symbol, 'Posição PAPER encerrada por nível de preço.', JSON.stringify({ price, gross, fees, net })]
           );
+          const modeledRisk = Number(trade.risk_brl || 0);
+          if (net < -modeledRisk - 0.01) {
+            await client.query(
+              'INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,$2,$3,$4,$5)',
+              [trade.id, 'RISK_OVERRUN', trade.symbol, 'Perda simulada excedeu o risco modelado; revisar gap e slippage.', JSON.stringify({ modeledRiskBRL: modeledRisk, realizedNetPnlBRL: net, overrunBRL: Math.abs(net) - modeledRisk })]
+            );
+          }
           realizedDelta += net;
         }
         if (realizedDelta !== 0) {
