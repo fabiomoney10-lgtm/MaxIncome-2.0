@@ -13,6 +13,9 @@ const SWING_TARGET_PCT = 6;
 const SWING_SCORE_MIN = 70;
 const SWING_MAX_OPEN_POSITIONS = 3;
 const SWING_RISK_FRACTION = 0.5;
+// Keep values compatible with the existing production database CHECK constraints.
+const SWING_EVENT_TYPE = 'TRADE_OPENED';
+const SWING_STRATEGY_SIGNAL = 'BULLISH';
 
 function sizeSwingPosition({
   entryPrice,
@@ -155,10 +158,11 @@ class SwingPaperTrader {
           const entryFeeBRL = sizing.entryValueBRL * Number(settings.fee_rate_per_side);
           const idempotencyKey = 'swing:' + day + ':' + symbol + ':' + (Number(daily.trades_opened) + 1);
           const inserted = await client.query(
-            "INSERT INTO public.paper_trades (symbol,side,quantity,entry_price,stop_price,take_profit_price,entry_value_brl,risk_brl,estimated_entry_fee_brl,estimated_exit_fee_brl,idempotency_key,strategy_signal,metadata) VALUES ($1,'BUY',$2,$3,$4,$5,$6,$7,$8,$8,$9,'SWING_BUY_CANDIDATE',$10) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id",
+            "INSERT INTO public.paper_trades (symbol,side,quantity,entry_price,stop_price,take_profit_price,entry_value_brl,risk_brl,estimated_entry_fee_brl,estimated_exit_fee_brl,idempotency_key,strategy_signal,metadata) VALUES ($1,'BUY',$2,$3,$4,$5,$6,$7,$8,$8,$9,$10,$11) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id",
             [
               symbol, sizing.quantity, sizing.entryPrice, sizing.stopPrice, sizing.takeProfitPrice,
               sizing.entryValueBRL, sizing.riskBRL, entryFeeBRL, idempotencyKey,
+              SWING_STRATEGY_SIGNAL,
               JSON.stringify({
                 engine: 'SWING',
                 timeframe: ['4h', '1D'],
@@ -178,8 +182,8 @@ class SwingPaperTrader {
             [day]
           );
           await client.query(
-            "INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,'SWING_TRADE_OPENED',$2,'Posição Swing PAPER aberta; nenhuma ordem enviada à corretora.',$3)",
-            [inserted.rows[0].id, symbol, JSON.stringify({
+            "INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,$2,$3,'Posição Swing PAPER aberta; nenhuma ordem enviada à corretora.',$4)",
+            [inserted.rows[0].id, SWING_EVENT_TYPE, symbol, JSON.stringify({
               entry: sizing.entryPrice,
               stop: sizing.stopPrice,
               target: sizing.takeProfitPrice,
@@ -262,5 +266,7 @@ module.exports = {
   SWING_STOP_LOSS_PCT,
   SWING_TARGET_PCT,
   SWING_SCORE_MIN,
-  SWING_MAX_OPEN_POSITIONS
+  SWING_MAX_OPEN_POSITIONS,
+  SWING_EVENT_TYPE,
+  SWING_STRATEGY_SIGNAL
 };
