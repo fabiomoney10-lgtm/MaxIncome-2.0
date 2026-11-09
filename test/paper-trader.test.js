@@ -99,7 +99,7 @@ test('Bybit accepts the documented 4h and daily intervals and excludes their ope
    ? currentStart-86400000
    : currentStart-duration;
   return {ok:true,status:200,text:async()=>JSON.stringify({retCode:0,result:{list:[
-   [String(currentStart),'','','','999'],[String(previousStart),'','','','100']
+   [String(currentStart),'998','1000','997','999','10','9990'],[String(previousStart),'99','101','98','100','10','1000']
   ]}})};
  };
  try{
