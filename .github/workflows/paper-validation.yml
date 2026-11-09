@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - audit/daytrade-live-price-closed-candles
 
 permissions:
   contents: read
