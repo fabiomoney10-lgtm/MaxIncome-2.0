@@ -63,3 +63,9 @@ test('SwingEngine rejects short 4h or daily history instead of reporting a fresh
  assert.match(engine.getStatus().assets.BTCUSDT.reason,/Histórico insuficiente/);
  assert.equal(engine.getStatus().lastSuccessAt,null);
 });
+
+test('Swing persistence uses existing database-compatible enum values',()=>{
+ const {SWING_EVENT_TYPE,SWING_STRATEGY_SIGNAL}=require('../src/swing-paper-trader');
+ assert.equal(SWING_EVENT_TYPE,'TRADE_OPENED');
+ assert.equal(SWING_STRATEGY_SIGNAL,'BULLISH');
+});
