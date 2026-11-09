@@ -24,7 +24,8 @@ class TradingEngine {
         }catch(err){return [symbol,{error:err.message,signal:'INSUFFICIENT_DATA'}];}
       }));
       this.state.assets=Object.fromEntries(rows);
-      this.state.connected=rows.some(([,v])=>Number.isFinite(Number(v.lastPrice)));
+      // A live ticker alone is not enough: health requires a valid closed-candle signal too.
+      this.state.connected=rows.some(([,v])=>Number.isFinite(Number(v.lastPrice))&&v.signal!=='INSUFFICIENT_DATA'&&!v.error);
       this.state.updatedAt=new Date().toISOString();
       this.state.error=this.state.connected?null:'Nenhum ativo retornou dados válidos.';
       this.addLog('Dados públicos: '+(this.client.marketDataEnvironment||'BYBIT MAINNET')+'. Ambiente privado configurado: '+(this.client.tradingEnvironment||this.client.environment)+'. PAPER ativo; ordens reais bloqueadas.');
