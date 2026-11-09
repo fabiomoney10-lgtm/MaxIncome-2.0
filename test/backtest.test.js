@@ -3,7 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const {runSmaBacktest}=require('../src/backtest');
 
-function risingSeries(lastHigh=126,lastLow=120) {
+function risingSeries(lastHigh=126,lastLow=121) {
   const candles=Array.from({length:21},(_,i)=>{
     const close=100+i;
     return {start:i,open:close-0.2,high:close+0.5,low:close-0.5,close};
