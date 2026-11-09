@@ -5,6 +5,7 @@ const {createPool}=require('../src/paper-trader');
 const {RiskManager}=require('../src/risk-manager');
 const {analyzeCandles}=require('../src/strategy');
 const {getTradingDate,calculateAvailableDailyRisk,calculateRiskPerUnitBRL}=require('../src/risk-guards');
+const {candleEndTime,KLINE_INTERVALS}=require('../src/bybit');
 
 test('fails closed when DATABASE_URL is absent',()=>assert.throws(()=>createPool(''),/DATABASE_URL não configurada/));
 test('risk limits expose PAPER-only controls and never enable exchange execution',()=>{
@@ -68,26 +69,64 @@ test('unit risk rejects invalid prices and rates',()=>{
  assert.throws(()=>calculateRiskPerUnitBRL({entryPrice:0,fxRate:5,stopLossPct:1,feeRatePerSide:0.001}),/Parâmetros inválidos/);
 });
 
-
-test('Bybit getKlines excludes the currently forming candle',async()=>{
+test('Bybit getKlines excludes the currently forming 15-minute candle',async()=>{
  const {BybitClient}=require('../src/bybit');
  const intervalMs=15*60*1000;
  const currentStart=Math.floor(Date.now()/intervalMs)*intervalMs;
  const closedStart=currentStart-intervalMs;
  const originalFetch=global.fetch;
- global.fetch=async()=>({
-  ok:true,status:200,
-  text:async()=>JSON.stringify({retCode:0,result:{list:[
-   [String(currentStart),'','','','999'],
-   [String(closedStart),'','','','100']
-  ]}})
- });
+ global.fetch=async()=>({ok:true,status:200,text:async()=>JSON.stringify({retCode:0,result:{list:[
+  [String(currentStart),'','','','999'],[String(closedStart),'','','','100']
+ ]}})});
  try{
-  const client=new BybitClient({testnet:true});
-  const candles=await client.getKlines('BTCUSDT','15','60');
+  const candles=await new BybitClient({testnet:true}).getKlines('BTCUSDT','15','60');
   assert.deepEqual(candles.map(c=>c.start),[closedStart]);
   assert.deepEqual(candles.map(c=>c.close),[100]);
+  assert.equal(candles[0].isClosed,true);
  }finally{global.fetch=originalFetch;}
+});
+
+test('Bybit accepts the documented 4h and daily intervals and excludes their open candles',async()=>{
+ const {BybitClient}=require('../src/bybit');
+ const originalFetch=global.fetch;
+ const requested=[];
+ global.fetch=async url=>{
+  const interval=new URL(String(url)).searchParams.get('interval');
+  requested.push(interval);
+  const duration=interval==='D'?86400000:240*60000;
+  const currentStart=Math.floor(Date.now()/duration)*duration;
+  const previousStart=interval==='D'
+   ? currentStart-86400000
+   : currentStart-duration;
+  return {ok:true,status:200,text:async()=>JSON.stringify({retCode:0,result:{list:[
+   [String(currentStart),'','','','999'],[String(previousStart),'','','','100']
+  ]}})};
+ };
+ try{
+  const client=new BybitClient({testnet:true});
+  const fourHour=await client.getKlines('BTCUSDT','240','60');
+  const daily=await client.getKlines('BTCUSDT','D','60');
+  assert.deepEqual(requested,['240','D']);
+  assert.equal(fourHour.length,1);
+  assert.equal(daily.length,1);
+  assert.equal(fourHour[0].close,100);
+  assert.equal(daily[0].close,100);
+ }finally{global.fetch=originalFetch;}
+});
+
+test('Bybit validates interval and limit before making a request',async()=>{
+ const {BybitClient}=require('../src/bybit');
+ const client=new BybitClient({testnet:true});
+ await assert.rejects(client.getKlines('BTCUSDT','invalid','60'),/Intervalo de candles inválido/);
+ await assert.rejects(client.getKlines('BTCUSDT','D','1001'),/Limite de candles inválido/);
+});
+
+test('candle interval boundaries support day, week and month',()=>{
+ const start=Date.UTC(2026,10,1);
+ assert.equal(candleEndTime(start,'D'),Date.UTC(2026,10,2));
+ assert.equal(candleEndTime(start,'W'),start+7*86400000);
+ assert.equal(candleEndTime(start,'M'),Date.UTC(2026,11,1));
+ assert.ok(KLINE_INTERVALS.has('D'));
 });
 
 test('trading engine keeps live ticker price separate from closed candle analysis',async()=>{
