@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - audit/daytrade-live-price-closed-candles
+      - feature/strategy-research-paper-lab
   pull_request:
     branches:
       - main
+      - audit/daytrade-live-price-closed-candles
 
 permissions:
   contents: read
