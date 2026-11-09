@@ -88,8 +88,15 @@ class SwingEngine {
             this.client.getKlines(symbol, '240', '60'),
             this.client.getKlines(symbol, 'D', '60')
           ]);
-          const closes = (daily || []).map(c => Number(c.close)).filter(v => Number.isFinite(v) && v > 0);
-          const momentum = closes.length >= 21 && closes[closes.length - 21] > 0
+          if (!Array.isArray(fourHour) || fourHour.length < 50 ||
+              !Array.isArray(daily) || daily.length < 50) {
+            throw new Error('Histórico insuficiente: Swing exige ao menos 50 candles fechados de 4h e 1D.');
+          }
+          const closes = daily.map(c => Number(c.close)).filter(v => Number.isFinite(v) && v > 0);
+          if (closes.length < 50) {
+            throw new Error('Candles diários inválidos ou insuficientes para análise Swing.');
+          }
+          const momentum = closes[closes.length - 21] > 0
             ? ((closes[closes.length - 1] / closes[closes.length - 21]) - 1) * 100 : 0;
           const currentPrice = Number(ticker && ticker.lastPrice);
           if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
