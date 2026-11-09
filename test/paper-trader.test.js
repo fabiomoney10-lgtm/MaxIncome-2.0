@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const {createPool}=require('../src/paper-trader');
 const {RiskManager}=require('../src/risk-manager');
 const {analyzeCandles}=require('../src/strategy');
-const {getTradingDate,calculateAvailableDailyRisk,calculateRiskPerUnitBRL}=require('../src/risk-guards');
+const {getTradingDate,calculateAvailableDailyRisk,calculateRiskPerUnitBRL,calculateMinimumTargetPct}=require('../src/risk-guards');
 const {candleEndTime,KLINE_INTERVALS}=require('../src/bybit');
 
 test('fails closed when DATABASE_URL is absent',()=>assert.throws(()=>createPool(''),/DATABASE_URL não configurada/));
@@ -146,4 +146,12 @@ test('trading engine keeps live ticker price separate from closed candle analysi
  assert.equal(asset.candleClose,21);
  assert.equal(asset.signal,'BULLISH');
  assert.equal(asset.risk,undefined);
+});
+
+test('minimum target preserves at least 2:1 modeled net reward-to-risk after fees and slippage',()=>{
+ const dayTarget=calculateMinimumTargetPct({stopLossPct:1,feeRatePerSide:0.001,slippageBufferPct:0.25});
+ const swingTarget=calculateMinimumTargetPct({stopLossPct:3,feeRatePerSide:0.001,slippageBufferPct:0.25});
+ assert.ok(Math.abs(dayTarget-3.35)<1e-9);
+ assert.ok(Math.abs(swingTarget-7.35)<1e-9);
+ assert.throws(()=>calculateMinimumTargetPct({stopLossPct:0,feeRatePerSide:0.001}),/Parâmetros inválidos/);
 });
