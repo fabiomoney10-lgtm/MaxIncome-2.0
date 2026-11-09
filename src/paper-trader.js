@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
-const { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require('./risk-guards');
+const { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, calculateMinimumTargetPct, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require('./risk-guards');
 
 function createPool(connectionString) {
   if (!connectionString) throw new Error('DATABASE_URL não configurada; motor PAPER permanece bloqueado.');
