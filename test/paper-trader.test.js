@@ -155,3 +155,18 @@ test('minimum target preserves at least 2:1 modeled net reward-to-risk after fee
  assert.ok(Math.abs(swingTarget-7.35)<1e-9);
  assert.throws(()=>calculateMinimumTargetPct({stopLossPct:0,feeRatePerSide:0.001}),/Parâmetros inválidos/);
 });
+
+test('market health fails when tickers exist but closed-candle history is insufficient',async()=>{
+ const {TradingEngine}=require('../src/trading-engine');
+ const client={
+  environment:'BYBIT TESTNET',
+  tradingEnvironment:'BYBIT TESTNET',
+  marketDataEnvironment:'BYBIT MAINNET',
+  getTicker:async symbol=>({symbol,lastPrice:100,change24h:0}),
+  getKlines:async()=>[]
+ };
+ const engine=new TradingEngine({client,assets:['BTCUSDT']});
+ await assert.rejects(engine.runOnce(),/Nenhum ativo retornou dados válidos/);
+ assert.equal(engine.getStatus().connected,false);
+ assert.equal(engine.getStatus().assets.BTCUSDT.signal,'INSUFFICIENT_DATA');
+});
