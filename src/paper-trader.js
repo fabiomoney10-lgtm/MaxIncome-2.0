@@ -94,7 +94,7 @@ class PaperTrader {
           if (net < -modeledRisk - 0.01) {
             await client.query(
               'INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,$2,$3,$4,$5)',
-              [trade.id, 'RISK_OVERRUN', trade.symbol, 'Perda simulada excedeu o risco modelado; revisar gap e slippage.', JSON.stringify({ modeledRiskBRL: modeledRisk, realizedNetPnlBRL: net, overrunBRL: Math.abs(net) - modeledRisk })]
+              [trade.id, 'STOP_TRIGGERED', trade.symbol, 'ALERTA RISK_OVERRUN: perda simulada excedeu o risco modelado; revisar gap e slippage.', JSON.stringify({ event: 'RISK_OVERRUN', modeledRiskBRL: modeledRisk, realizedNetPnlBRL: net, overrunBRL: Math.abs(net) - modeledRisk })]
             );
           }
           realizedDelta += net;
