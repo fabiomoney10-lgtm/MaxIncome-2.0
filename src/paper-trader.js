@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
-const { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require('./risk-guards');
+const { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, calculateMinimumTargetPct, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require('./risk-guards');
 
 function createPool(connectionString) {
   if (!connectionString) throw new Error('DATABASE_URL não configurada; motor PAPER permanece bloqueado.');
@@ -90,6 +90,13 @@ class PaperTrader {
             'INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,$2,$3,$4,$5)',
             [trade.id, reason === 'STOP_LOSS' ? 'STOP_TRIGGERED' : 'TARGET_TRIGGERED', trade.symbol, 'Posição PAPER encerrada por nível de preço.', JSON.stringify({ price, gross, fees, net })]
           );
+          const modeledRisk = Number(trade.risk_brl || 0);
+          if (net < -modeledRisk - 0.01) {
+            await client.query(
+              'INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,$2,$3,$4,$5)',
+              [trade.id, 'STOP_TRIGGERED', trade.symbol, 'ALERTA RISK_OVERRUN: perda simulada excedeu o risco modelado; revisar gap e slippage.', JSON.stringify({ event: 'RISK_OVERRUN', modeledRiskBRL: modeledRisk, realizedNetPnlBRL: net, overrunBRL: Math.abs(net) - modeledRisk })]
+            );
+          }
           realizedDelta += net;
         }
         if (realizedDelta !== 0) {
@@ -142,8 +149,6 @@ class PaperTrader {
             if (alreadyOpen.rowCount) continue;
             const entry = Number(ticker.lastPrice);
             const stop = entry * (1 - Number(settings.stop_loss_pct) / 100);
-            const stopPct = Number(settings.stop_loss_pct) / 100;
-            const feePct = Number(settings.fee_rate_per_side) * 2;
             const riskPerUnitBrl = calculateRiskPerUnitBRL({ entryPrice: entry, fxRate: fx, stopLossPct: Number(settings.stop_loss_pct), feeRatePerSide: Number(settings.fee_rate_per_side) });
             if (!(riskPerUnitBrl > 0)) continue;
             const requestedRisk = Math.min(Number(settings.max_risk_per_trade_brl), Number(settings.initial_capital_brl) * 0.01, availableDailyRisk);
@@ -156,7 +161,11 @@ class PaperTrader {
             const notional = qty * entry * fx;
             const actualRisk = qty * riskPerUnitBrl;
             if (!(qty > 0) || actualRisk > requestedRisk + 0.01 || notional < 10) continue;
-            const minimumNetTwoToOneMove = 2 * (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT / 100 + feePct) + feePct;
+            const minimumNetTwoToOneMove = calculateMinimumTargetPct({
+              stopLossPct: Number(settings.stop_loss_pct),
+              feeRatePerSide: Number(settings.fee_rate_per_side),
+              slippageBufferPct: DEFAULT_STOP_SLIPPAGE_BUFFER_PCT
+            }) / 100;
             const configuredTargetMove = Number(settings.take_profit_pct) / 100;
             const takeProfit = entry * (1 + Math.max(configuredTargetMove, minimumNetTwoToOneMove));
             const entryFee = notional * Number(settings.fee_rate_per_side);
@@ -225,6 +234,9 @@ class PaperTrader {
       tradingDateTimezone: 'America/Sao_Paulo',
       fxUsdBrl: this.lastFx,
       fxDescription: 'USDT aproximado por USD; câmbio indicativo, não cotação de execução',
+      minimumNetTargetPct: cfg.stop_loss_pct && cfg.fee_rate_per_side !== undefined
+        ? calculateMinimumTargetPct({ stopLossPct: Number(cfg.stop_loss_pct), feeRatePerSide: Number(cfg.fee_rate_per_side), slippageBufferPct: DEFAULT_STOP_SLIPPAGE_BUFFER_PCT })
+        : null,
       lastRunAt: this.lastRunAt,
       error: this.lastError,
       dailyRiskReservedBRL: reservedOpenRisk,

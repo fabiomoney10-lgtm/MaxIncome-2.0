@@ -1,0 +1,33 @@
+name: MaxIncome PAPER validation
+
+on:
+  push:
+    branches:
+      - audit/daytrade-live-price-closed-candles
+  pull_request:
+    branches:
+      - main
+      - audit/daytrade-live-price-closed-candles
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install
+      - name: Check JavaScript syntax
+        run: |
+          for file in server.js src/*.js test/*.js; do
+            node --check "$file"
+          done
+      - name: Run unit and regression tests
+        run: npm test

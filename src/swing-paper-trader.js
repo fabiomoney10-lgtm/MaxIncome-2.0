@@ -4,6 +4,7 @@ const {
   getTradingDate,
   calculateAvailableDailyRisk,
   calculateRiskPerUnitBRL,
+  calculateMinimumTargetPct,
   DEFAULT_STOP_SLIPPAGE_BUFFER_PCT
 } = require('./risk-guards');
 
@@ -12,6 +13,9 @@ const SWING_TARGET_PCT = 6;
 const SWING_SCORE_MIN = 70;
 const SWING_MAX_OPEN_POSITIONS = 3;
 const SWING_RISK_FRACTION = 0.5;
+// Keep values compatible with the existing production database CHECK constraints.
+const SWING_EVENT_TYPE = 'TRADE_OPENED';
+const SWING_STRATEGY_SIGNAL = 'BULLISH';
 
 function sizeSwingPosition({
   entryPrice,
@@ -50,8 +54,12 @@ function sizeSwingPosition({
   const riskBRL = quantity * riskPerUnitBRL;
   if (!(quantity > 0) || !(entryValueBRL >= 10) || riskBRL > requestedRisk + 0.01) return null;
 
-  const feePct = fee * 2 * 100;
-  const minimumTargetPct = 2 * (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT + feePct) + feePct;
+  const roundTripFeesPct = fee * 200;
+  const minimumTargetPct = calculateMinimumTargetPct({
+    stopLossPct: stopPct,
+    feeRatePerSide: fee,
+    slippageBufferPct: DEFAULT_STOP_SLIPPAGE_BUFFER_PCT
+  });
   const targetPct = Math.max(SWING_TARGET_PCT, minimumTargetPct);
   return {
     quantity,
@@ -61,7 +69,8 @@ function sizeSwingPosition({
     entryValueBRL,
     riskBRL,
     targetPct,
-    riskReward: targetPct / (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT + feePct)
+    riskReward: (targetPct - DEFAULT_STOP_SLIPPAGE_BUFFER_PCT - roundTripFeesPct) /
+      (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT + roundTripFeesPct)
   };
 }
 
@@ -149,10 +158,11 @@ class SwingPaperTrader {
           const entryFeeBRL = sizing.entryValueBRL * Number(settings.fee_rate_per_side);
           const idempotencyKey = 'swing:' + day + ':' + symbol + ':' + (Number(daily.trades_opened) + 1);
           const inserted = await client.query(
-            "INSERT INTO public.paper_trades (symbol,side,quantity,entry_price,stop_price,take_profit_price,entry_value_brl,risk_brl,estimated_entry_fee_brl,estimated_exit_fee_brl,idempotency_key,strategy_signal,metadata) VALUES ($1,'BUY',$2,$3,$4,$5,$6,$7,$8,$8,$9,'SWING_BUY_CANDIDATE',$10) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id",
+            "INSERT INTO public.paper_trades (symbol,side,quantity,entry_price,stop_price,take_profit_price,entry_value_brl,risk_brl,estimated_entry_fee_brl,estimated_exit_fee_brl,idempotency_key,strategy_signal,metadata) VALUES ($1,'BUY',$2,$3,$4,$5,$6,$7,$8,$8,$9,$10,$11) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id",
             [
               symbol, sizing.quantity, sizing.entryPrice, sizing.stopPrice, sizing.takeProfitPrice,
               sizing.entryValueBRL, sizing.riskBRL, entryFeeBRL, idempotencyKey,
+              SWING_STRATEGY_SIGNAL,
               JSON.stringify({
                 engine: 'SWING',
                 timeframe: ['4h', '1D'],
@@ -172,8 +182,8 @@ class SwingPaperTrader {
             [day]
           );
           await client.query(
-            "INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,'SWING_TRADE_OPENED',$2,'Posição Swing PAPER aberta; nenhuma ordem enviada à corretora.',$3)",
-            [inserted.rows[0].id, symbol, JSON.stringify({
+            "INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,$2,$3,'Posição Swing PAPER aberta; nenhuma ordem enviada à corretora.',$4)",
+            [inserted.rows[0].id, SWING_EVENT_TYPE, symbol, JSON.stringify({
               entry: sizing.entryPrice,
               stop: sizing.stopPrice,
               target: sizing.takeProfitPrice,
@@ -234,7 +244,10 @@ class SwingPaperTrader {
       fxUsdBrl: this.lastFx,
       scoreMinimum: this.scoreMin,
       stopLossPct: SWING_STOP_LOSS_PCT,
-      targetPct: SWING_TARGET_PCT,
+      configuredTargetPct: SWING_TARGET_PCT,
+      targetPct: cfg.fee_rate_per_side !== undefined
+        ? Math.max(SWING_TARGET_PCT, calculateMinimumTargetPct({ stopLossPct: SWING_STOP_LOSS_PCT, feeRatePerSide: Number(cfg.fee_rate_per_side), slippageBufferPct: DEFAULT_STOP_SLIPPAGE_BUFFER_PCT }))
+        : SWING_TARGET_PCT,
       maxOpenPositions: this.maxOpenPositions,
       riskPerTradeCapBRL: Math.min(Number(cfg.max_risk_per_trade_brl || 0) * SWING_RISK_FRACTION, Number(cfg.initial_capital_brl || 0) * 0.005),
       dailyRiskReservedBRL: reservedRisk,
@@ -253,5 +266,7 @@ module.exports = {
   SWING_STOP_LOSS_PCT,
   SWING_TARGET_PCT,
   SWING_SCORE_MIN,
-  SWING_MAX_OPEN_POSITIONS
+  SWING_MAX_OPEN_POSITIONS,
+  SWING_EVENT_TYPE,
+  SWING_STRATEGY_SIGNAL
 };

@@ -77,7 +77,7 @@ app.get('/api/health',async(_req,res)=>{
  const cycleFresh=!!engineLoop.lastSuccessAt&&(Date.now()-Date.parse(engineLoop.lastSuccessAt)<120000);
  const swingFresh=!!swingLoop.lastSuccessAt&&(Date.now()-Date.parse(swingLoop.lastSuccessAt)<swingIntervalMs*3);
  const ok=db&&marketConnected&&cycleFresh&&swingFresh&&!engineLoop.lastError&&!swingLoop.lastError;
- res.status(ok?200:503).json({ok,service:'MaxIncome',mode:'PAPER',bybitEnvironment,marketDataEnvironment:'BYBIT MAINNET',marketConnected,databaseConnected:db,engineLoop:{...engineLoop},swingLoop:{...swingLoop},orderExecutionEnabled:false,databaseError:db?null:databaseError,timestamp:new Date().toISOString()});
+ res.status(ok?200:503).json({ok,service:'MaxIncome',mode:'PAPER',bybitEnvironment,marketDataEnvironment:'BYBIT MAINNET',marketConnected,databaseConnected:db,engineLoop:{running:engineLoop.running,lastStartedAt:engineLoop.lastStartedAt,lastSuccessAt:engineLoop.lastSuccessAt,lastError:engineLoop.lastError?'Falha no ciclo Day Trade.':null},swingLoop:{running:swingLoop.running,lastStartedAt:swingLoop.lastStartedAt,lastSuccessAt:swingLoop.lastSuccessAt,lastError:swingLoop.lastError?'Falha no ciclo Swing.':null},orderExecutionEnabled:false,databaseError:db?null:'Banco indisponível ou não configurado.',timestamp:new Date().toISOString()});
 });
 app.get('/api/status',(_req,res)=>res.json(publicStatus()));
 app.get('/api/paper/status',requireReadToken,async(_req,res)=>{

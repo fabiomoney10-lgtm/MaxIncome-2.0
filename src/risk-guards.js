@@ -26,6 +26,17 @@ function calculateAvailableDailyRisk({ maxDailyLossBRL, realizedPnlBRL = 0, unre
   return Math.max(0, limit - currentDrawdown - reserved);
 }
 
+function calculateMinimumTargetPct({ stopLossPct, feeRatePerSide, slippageBufferPct = DEFAULT_STOP_SLIPPAGE_BUFFER_PCT, rewardRisk = 2 }) {
+  const values = [stopLossPct, feeRatePerSide, slippageBufferPct, rewardRisk].map(Number);
+  if (values.some(value => !Number.isFinite(value)) || values[0] <= 0 || values[1] < 0 || values[2] < 0 || values[3] <= 0) {
+    throw new TypeError('Parâmetros inválidos para calcular o alvo líquido.');
+  }
+  const [stop, fee, slippage, ratio] = values;
+  const roundTripFeesPct = fee * 200;
+  const modeledStopLossPct = stop + slippage + roundTripFeesPct;
+  return ratio * modeledStopLossPct + slippage + roundTripFeesPct;
+}
+
 function calculateRiskPerUnitBRL({ entryPrice, fxRate, stopLossPct, feeRatePerSide, slippageBufferPct = DEFAULT_STOP_SLIPPAGE_BUFFER_PCT }) {
   const values = [entryPrice, fxRate, stopLossPct, feeRatePerSide, slippageBufferPct].map(Number);
   if (values.some(value => !Number.isFinite(value)) || values[0] <= 0 || values[1] <= 0 || values[2] <= 0 || values[3] < 0 || values[4] < 0) {
@@ -35,4 +46,4 @@ function calculateRiskPerUnitBRL({ entryPrice, fxRate, stopLossPct, feeRatePerSi
   return entry * fx * ((stopPct + slippage) / 100 + fee * 2);
 }
 
-module.exports = { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT };
+module.exports = { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, calculateMinimumTargetPct, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT };
