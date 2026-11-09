@@ -138,7 +138,7 @@ function runSmaBacktest(candles, options = {}) {
     mode: 'HISTORICAL_BACKTEST_ONLY',
     executionEnabled: false,
     currency: 'quote currency (e.g. USDT)',
-    assumptions: { initialCapital, riskPerTrade, stopLossPct, targetPct, feeRatePerSide, slippagePct, entryAtNextCandleOpen: true, stopFirstWhenBothTouched: true },
+    assumptions: { initialCapital, riskPerTrade, stopLossPct, targetPct, feeRatePerSide, slippagePct, entryAtNextCandleOpen: true, stopFirstWhenBothTouched: true, drawdownBasis: 'equity after closed trades; intratrade drawdown is not included' },
     metrics: {
       trades: trades.length,
       wins: winners.length,
