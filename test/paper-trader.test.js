@@ -76,7 +76,7 @@ test('Bybit getKlines excludes the currently forming 15-minute candle',async()=>
  const closedStart=currentStart-intervalMs;
  const originalFetch=global.fetch;
  global.fetch=async()=>({ok:true,status:200,text:async()=>JSON.stringify({retCode:0,result:{list:[
-  [String(currentStart),'','','','999'],[String(closedStart),'','','','100']
+  [String(currentStart),'998','1000','997','999','10','9990'],[String(closedStart),'99','101','98','100','10','1000']
  ]}})});
  try{
   const candles=await new BybitClient({testnet:true}).getKlines('BTCUSDT','15','60');
