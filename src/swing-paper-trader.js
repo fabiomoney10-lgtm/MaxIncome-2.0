@@ -61,7 +61,7 @@ function sizeSwingPosition({
     entryValueBRL,
     riskBRL,
     targetPct,
-    riskReward: targetPct / (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT + feePct)
+    riskReward: (targetPct - DEFAULT_STOP_SLIPPAGE_BUFFER_PCT - roundTripFeesPct) /\n      (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT + roundTripFeesPct)
   };
 }
 
