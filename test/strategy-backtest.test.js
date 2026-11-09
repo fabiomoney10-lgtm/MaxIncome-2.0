@@ -50,3 +50,7 @@ test('out-of-sample test period uses preceding candles only for indicator warmup
     assert.ok(item.outOfSample.trades.every(trade => trade.entryIndex >= start));
   }
 });
+
+test('comparison rejects an out-of-range train/test ratio', () => {
+  assert.throws(() => runStrategyComparisonBacktest(risingCandles(), { trainRatio: 0.9 }), /entre 0.5 e 0.85/);
+});
