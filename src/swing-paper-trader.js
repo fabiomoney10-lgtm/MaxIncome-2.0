@@ -240,7 +240,10 @@ class SwingPaperTrader {
       fxUsdBrl: this.lastFx,
       scoreMinimum: this.scoreMin,
       stopLossPct: SWING_STOP_LOSS_PCT,
-      targetPct: SWING_TARGET_PCT,
+      configuredTargetPct: SWING_TARGET_PCT,
+      targetPct: cfg.fee_rate_per_side !== undefined
+        ? Math.max(SWING_TARGET_PCT, calculateMinimumTargetPct({ stopLossPct: SWING_STOP_LOSS_PCT, feeRatePerSide: Number(cfg.fee_rate_per_side), slippageBufferPct: DEFAULT_STOP_SLIPPAGE_BUFFER_PCT }))
+        : SWING_TARGET_PCT,
       maxOpenPositions: this.maxOpenPositions,
       riskPerTradeCapBRL: Math.min(Number(cfg.max_risk_per_trade_brl || 0) * SWING_RISK_FRACTION, Number(cfg.initial_capital_brl || 0) * 0.005),
       dailyRiskReservedBRL: reservedRisk,
