@@ -71,6 +71,39 @@ async function fetchBinanceHistory(symbol, interval) {
   }
   return Array.from(byStart.values()).sort((a,b)=>a.start-b.start).slice(-TARGET_CANDLES);
 }
+ 
+async function fetchKrakenHistory(symbol, interval) {
+  const pairs = { XRPUSDT:'XRPUSD', BTCUSDT:'XBTUSD', ETHUSDT:'ETHUSD', SOLUSDT:'SOLUSD' };
+  const minutes = { '15':15, '60':60, '240':240, 'D':1440 };
+  const byStart = new Map();
+  let since = Math.max(0, Math.floor(Date.now()/1000 - TARGET_CANDLES * minutes[interval] * 60));
+  for (let page = 0; page < Math.ceil(TARGET_CANDLES / 720) + 1; page++) {
+    const url = new URL('https://api.kraken.com/0/public/OHLC');
+    url.search = new URLSearchParams({ pair:pairs[symbol], interval:String(minutes[interval]), since:String(since) }).toString();
+    const response = await fetch(url, { signal:AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error('Kraken HTTP ' + response.status);
+    const data = await response.json();
+    if (data.error && data.error.length) throw new Error('Kraken: ' + data.error.join('; '));
+    const result = data.result || {};
+    const pairKey = Object.keys(result).find(key => key !== 'last');
+    const rows = pairKey ? result[pairKey] : [];
+    if (!rows.length) break;
+    for (const row of rows) {
+      const candle = { start:Number(row[0])*1000, open:Number(row[1]), high:Number(row[2]), low:Number(row[3]), close:Number(row[4]), volume:Number(row[6]) };
+      const candleEnd = candle.start + minutes[interval]*60*1000;
+      if (!Number.isFinite(candle.start) || candleEnd > Date.now() ||
+          ![candle.open,candle.high,candle.low,candle.close,candle.volume].every(Number.isFinite) ||
+          candle.open <= 0 || candle.volume < 0 || candle.high < Math.max(candle.open,candle.close,candle.low) ||
+          candle.low > Math.min(candle.open,candle.close,candle.high)) continue;
+      byStart.set(candle.start,candle);
+    }
+    const nextSince = Number(result.last);
+    if (!Number.isFinite(nextSince) || nextSince <= since || rows.length < 720) break;
+    since = nextSince;
+    await sleep(150);
+  }
+  return Array.from(byStart.values()).sort((a,b)=>a.start-b.start).slice(-TARGET_CANDLES);
+}
 
 async function fetchMarketHistory(client, symbol, interval) {
   if (!bybitBlocked) {
@@ -84,8 +117,12 @@ async function fetchMarketHistory(client, symbol, interval) {
   }
   try {
     return { candles:await fetchBinanceHistory(symbol,interval), source:'Binance Spot fallback (not Bybit execution data)' };
-  } catch (error) {
-    return { candles:[], source:'unavailable', error:String(error.message || error) };
+  } catch (binanceError) {
+    try {
+      return { candles:await fetchKrakenHistory(symbol,interval), source:'Kraken Spot USD reference fallback (not Bybit execution data)' };
+    } catch (krakenError) {
+      return { candles:[], source:'unavailable', error:'Binance: ' + String(binanceError.message || binanceError) + '; Kraken: ' + String(krakenError.message || krakenError) };
+    }
   }
 }
 
@@ -112,7 +149,7 @@ async function main() {
       initialCapitalQuote: 5000, riskPerTradeQuote: 50, stopLossPct: 1,
       feeRatePerSide: 0.001, slippagePctPerSide: DEFAULT_STOP_SLIPPAGE_BUFFER_PCT,
       trainRatio: 0.7, signalOnClosedCandle: true, entryAtNextCandleOpen: true,
-      stopFirstWhenBothTouched: true, quoteCurrency: 'USDT',
+      stopFirstWhenBothTouched: true, quoteCurrency: 'USDT when Bybit/Binance; USD when Kraken fallback is used',
       limitations: ['independent symbol/timeframe runs; no portfolio/shared daily risk simulation',
         'drawdown measured after closed trades; intratrade drawdown excluded',
         'no spread, order-book depth, market impact, latency or funding costs',
@@ -161,7 +198,7 @@ async function main() {
   const lines = [
     '# MaxIncome 2.0 — histórico PAPER',
     '',
-    'Fonte: candles públicos OHLCV da Bybit Spot. Valores de P&L em USDT, não em BRL.',
+    'Fonte preferencial: Bybit Spot. Fallbacks claramente identificados: Binance Spot e Kraken Spot. Valores de P&L na moeda de cotação da fonte (USDT ou USD), não em BRL.',
     '',
     'Custos simulados: taxa 0,1% por lado e slippage adverso 0,25% por lado. Entrada no candle seguinte; stop-first quando stop e alvo aparecem no mesmo candle.',
     '',
