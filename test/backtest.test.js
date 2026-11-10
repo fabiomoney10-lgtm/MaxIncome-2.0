@@ -15,7 +15,7 @@ test('backtest returns an empty, finite report for insufficient history',()=>{
 
 test('backtest charges entry and exit costs and reports net PnL',()=>{
  const data=bars([100,99,98,99,100,102,104,106,108,110,112,114,116,118,120,122,124,126,128,130,132,134,136,138,140,142,144,146,148,150,152,154,156,158,160]);
- const result=backtestSma(data,{fastPeriod:2,slowPeriod:3,stopPct:1,targetPct:4.2,feeRate:0.001,slippagePct:0.0025});
+ const result=backtestSma(data,{fastPeriod:2,slowPeriod:3,stopPct:1,targetPct:4.2,feeRate:0.001,slippagePct:0.25});
  assert.ok(result.tradeCount>=1);
  assert.ok(result.trades[0].fees>0);
  assert.equal(result.assumptions.feePctPerSide,0.1);
