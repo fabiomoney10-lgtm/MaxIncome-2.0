@@ -220,7 +220,6 @@ async function main() {
       warmupCandles: 50,
       entry: 'Next candle open after a signal on a fully closed candle',
       stopTarget: '1% stop / 4.2% target; stop wins if both levels are touched in the same candle',
-      fees: '0.10% per side',
       slippage: '0.25% per side base; 0.50% per side stress',
       fees: '0.10% per side base; 0.20% per side stress',
       sizing: '5,000 USDT virtual capital; 50 USDT max risk budget per trade',
