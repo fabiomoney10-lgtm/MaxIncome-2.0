@@ -37,3 +37,12 @@ jobs:
           node --check test/research-strategies.test.js
       - name: Run complete test suite
         run: npm test
+      - name: Fetch public Bybit candles and run chronological backtests
+        run: npm run research:backtest
+      - name: Upload research dataset and report
+        uses: actions/upload-artifact@v4
+        with:
+          name: maxincome-research-backtest
+          path: artifacts/research/
+          if-no-files-found: error
+          retention-days: 30
