@@ -1,6 +1,7 @@
 'use strict';
 const { analyzeCandles } = require('./strategy');
 const { RiskManager } = require('./risk-manager');
+const { evaluateStrategySuite } = require('./strategy-suite');
 
 class TradingEngine {
   constructor({ client, assets, legacyXrpReserved, maxRiskBRL, maxDailyLossBRL, maxTradesPerDay, maxExposureBRL, stopLossPct, takeProfitPct }) {
@@ -20,7 +21,7 @@ class TradingEngine {
           const analysis=analyzeCandles(candles);
           // Preserve the live ticker price for PAPER fills and position monitoring.
           // Strategy indicators are calculated only from completed candles.
-          return [symbol,{...analysis,...ticker,candleClose:analysis.lastPrice}];
+          return [symbol,{...analysis,...ticker,candleClose:analysis.lastPrice,strategySuite:evaluateStrategySuite(candles)}];
         }catch(err){return [symbol,{error:err.message,signal:'INSUFFICIENT_DATA'}];}
       }));
       this.state.assets=Object.fromEntries(rows);

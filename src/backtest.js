@@ -13,12 +13,14 @@ function normalizeCandles(candles) {
       open: Number(candle.open),
       high: Number(candle.high),
       low: Number(candle.low),
-      close: Number(candle.close)
+      close: Number(candle.close),
+      volume: candle.volume === null || candle.volume === undefined || candle.volume === '' ? null : Number(candle.volume)
     };
-    if (Object.values(item).some(value => !Number.isFinite(value)) ||
+    if (![item.start, item.open, item.high, item.low, item.close].every(Number.isFinite) ||
         item.open <= 0 || item.high <= 0 || item.low <= 0 || item.close <= 0 ||
         item.high < Math.max(item.open, item.close, item.low) ||
-        item.low > Math.min(item.open, item.close, item.high)) {
+        item.low > Math.min(item.open, item.close, item.high) ||
+        (item.volume !== null && (!Number.isFinite(item.volume) || item.volume < 0))) {
       throw new TypeError('Backtest recebeu candle OHLC inválido.');
     }
     return item;

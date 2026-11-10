@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {runSmaBacktest}=require('../src/backtest');
+const {runSmaBacktest,normalizeCandles}=require('../src/backtest');
 
 function risingSeries(lastHigh=126,lastLow=121) {
   const candles=Array.from({length:21},(_,i)=>{
@@ -37,4 +37,11 @@ test('SMA backtest rejects malformed candles and invalid cost assumptions',()=>{
   candles[0].high=0.5;
   assert.throws(()=>runSmaBacktest(candles),/candle OHLC inválido/);
   assert.throws(()=>runSmaBacktest(risingSeries(),{feeRatePerSide:-0.1}),/Parâmetros inválidos/);
+});
+
+test('backtest normalization preserves valid volume for research filters',()=>{
+ const candles=Array.from({length:22},(_,i)=>({start:i,open:10,high:11,low:9,close:10,volume:100+i}));
+ const normalized=normalizeCandles(candles);
+ assert.equal(normalized[0].volume,100);
+ assert.equal(normalized[21].volume,121);
 });

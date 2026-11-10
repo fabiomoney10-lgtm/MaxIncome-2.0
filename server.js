@@ -7,6 +7,7 @@ const {SwingEngine}=require('./src/swing-engine');
 const {SwingPaperTrader}=require('./src/swing-paper-trader');
 const {createReadTokenMiddleware}=require('./src/read-token');
 const {createPool,PaperTrader}=require('./src/paper-trader');
+const {runStrategyComparisonBacktest}=require('./src/strategy-backtest');
 
 const app=express();
 app.disable('x-powered-by');
@@ -96,6 +97,46 @@ app.get('/api/refresh',requireReadToken,async(_req,res)=>{
   res.json({...publicStatus(),paper:await paperTrader.getStatus(),swing:{...swingEngine.getStatus(),paper:await swingPaperTrader.getStatus()}});
  }catch(e){res.status(503).json({error:'Estado PAPER indisponível.',detail:e.message,databaseConnected:false,orderExecutionEnabled:false});}
 });
+
+app.get('/api/research/backtest',requireReadToken,async(req,res)=>{
+ const symbol=String(req.query.symbol||'BTCUSDT').toUpperCase();
+ const interval=String(req.query.interval||'240');
+ const limit=Number(req.query.limit||500);
+ if(!assets.includes(symbol))return res.status(400).json({error:'Ativo não permitido para pesquisa.'});
+ if(!['15','60','240','D'].includes(interval))return res.status(400).json({error:'Timeframe inválido; use 15, 60, 240 ou D.'});
+ if(!Number.isInteger(limit)||limit<110||limit>1000)return res.status(400).json({error:'Quantidade de candles deve ser um inteiro entre 110 e 1000.'});
+ if(!paperTrader)return res.status(503).json({error:'Configuração PAPER indisponível.'});
+ try{
+  const [candles,paper]=await Promise.all([client.getKlines(symbol,interval,String(limit)),paperTrader.getStatus()]);
+  if(candles.length<110)return res.status(422).json({error:'Histórico fechado insuficiente para comparação; são necessários ao menos 110 candles.',received:candles.length});
+  const cfg=paper.settings||{};
+  const comparison=runStrategyComparisonBacktest(candles,{
+   initialCapital:Number(cfg.initial_capital_brl||5000),
+   riskPerTrade:Number(cfg.max_risk_per_trade_brl||50),
+   stopLossPct:Number(cfg.stop_loss_pct||1),
+   feeRatePerSide:Number(cfg.fee_rate_per_side??0.001),
+   slippagePct:0.25,
+   trainRatio:0.7
+  });
+  const results=Object.fromEntries(Object.entries(comparison.results).map(([name,result])=>[name,{
+   full:result.full.metrics,
+   inSample:result.inSample.metrics,
+   outOfSample:result.outOfSample.metrics,
+   sampleTrades:result.outOfSample.trades.slice(0,20)
+  }]));
+  return res.json({
+   mode:'RESEARCH_ONLY',
+   executionEnabled:false,
+   symbol,interval,candleCount:comparison.candleCount,
+   split:comparison.split,
+   assumptions:comparison.results.TREND_FOLLOWING.full.assumptions,
+   results
+  });
+ }catch(error){
+  return res.status(502).json({error:'Não foi possível executar o backtest com os dados históricos.'});
+ }
+});
+
 app.get('/api/balance',requireReadToken,async(_req,res)=>{
  return res.status(410).json({error:'Consulta privada de carteira desativada no simulador PAPER.'});
 });
