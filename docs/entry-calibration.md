@@ -1,90 +1,65 @@
-# MaxIncome 2.0 — plano de calibração e validação
+# MaxIncome 2.0 — pesquisa e calibração de estratégias
 
 ## Escopo e segurança
 
-Esta branch é exclusivamente de pesquisa. Não altera `src/strategy.js`, `src/paper-trader.js`, `src/risk-guards.js`, parâmetros ativos, banco, secrets, variáveis do Render ou execução de ordens. Não habilita `trading_enabled`; PAPER e `orderExecutionEnabled=false` permanecem obrigatórios. Não fazer merge/deploy sem revisão e autorização.
+Esta branch é exclusivamente de pesquisa. Não altera o motor ativo, `src/strategy.js`, `src/paper-trader.js`, `src/risk-guards.js`, parâmetros ativos, banco, secrets, variáveis do Render ou execução de ordens. Não habilita `trading_enabled`; PAPER e `orderExecutionEnabled=false` permanecem obrigatórios. Não fazer merge/deploy sem revisão e autorização.
 
-## Estratégia ativa de referência
+## Estratégias comparadas
 
-- Day trade é long-only e usa SMA 9/21 em candles fechados de 15 minutos: sinal candidato quando SMA9 > SMA21 e fechamento > SMA9.
-- O sinal é uma condição de pesquisa, não uma previsão de lucro.
-- Swing é um motor de análise separado; seus sinais e limites não devem ser misturados com os resultados do Day Trade.
-- Taxa de referência: 0,1% por lado. Buffer de risco atual: 0,25% para slippage/gap. O buffer de risco não substitui a modelagem de fill no backtest.
-- O histórico PAPER previamente reconciliado contém duas perdas, XRP e ETH, totalizando -R$65,24. Duas operações não permitem inferir vantagem estatística.
+O backtest executável compara cinco regras long-only pré-definidas:
+1. Baseline SMA 9/21.
+2. Tendência SMA 20/50 com inclinação positiva.
+3. Momentum de 20 candles (mínimo +1,5% e preço acima da SMA20).
+4. Rompimento da máxima dos 20 candles anteriores, com filtro ATR e volume.
+5. Reversão à média apenas em regime lateral, RSI <= 30 e preço abaixo da banda inferior.
 
-## Sinais candidatos de pesquisa (sem integração ao motor)
+Os indicadores usam somente candles fechados até o candle do sinal. Os sinais são hipóteses fixas, não promessas de lucro. RSI usa média simples de ganhos/perdas (não Wilder). O módulo de diagnóstico `src/research-strategies.js` permanece isolado e não é importado pelo PaperTrader.
 
-O módulo `src/research-strategies.js` expõe diagnósticos long-only e independentes: baseline SMA 9/21, trend following SMA 20/50 com inclinação, momentum de 20 candles, breakout de 20 candles com filtro ATR e confirmação de volume quando disponível, e mean reversion somente em regime lateral com RSI e banda estatística. O regime de alta volatilidade bloqueia a classificação de tendência. O módulo exige 51 candles válidos e retorna explicitamente `executionEnabled:false` e `tradeAllowed:false`. RSI usa média simples de ganhos/perdas (não Wilder); thresholds são hipóteses pré-definidas, não parâmetros calibrados nem comprovadamente rentáveis. O módulo não é importado pelo PaperTrader.
+## Dados históricos reproduzíveis
 
-## Correções no backtester desta branch
+O comando `npm run research:backtest` executa `scripts/run-research-backtest.js`:
+- Consulta a API pública Bybit V5, categoria `spot`, intervalo de 15 minutos, para XRPUSDT, BTCUSDT, ETHUSDT e SOLUSDT.
+- Busca aproximadamente 365 dias, pagina até cobrir a janela, ordena cronologicamente, remove duplicatas e exclui candles ainda abertos.
+- Falha se houver erro de API, candles OHLCV inválidos ou menos de 500 candles por ativo; não substitui a fonte silenciosamente.
+- Registra páginas, quantidade bruta, duplicatas, candles descartados por ainda estarem abertos, lacunas estimadas, primeiro/último timestamp e SHA-256 de cada CSV.
+- Salva candles, qualidade dos dados, resumo CSV e relatório JSON em `artifacts/research/`.
 
-- O sinal SMA é calculado incluindo o fechamento do candle de sinal, que é a informação disponível no momento da decisão.
-- A entrada ocorre somente na abertura do candle seguinte, com slippage adverso.
-- Uma posição não é testada contra máxima/mínima de candle anterior à sua entrada.
-- Drawdown não marca uma posição futura contra o fechamento anterior ao fill. A marcação começa no candle da entrada.
-- Saída por stop usa execução conservadora em gaps; se stop e alvo forem tocados no mesmo candle, stop tem prioridade.
-- Taxa e slippage são aplicados separadamente na entrada e na saída. O relatório expõe os valores de taxa de cada lado por trade, custos totais e expectativa líquida por trade.
-- Liquidação no fim da amostra inclui slippage e taxa de saída.
-- Drawdown reportado é close-to-close após entrada, acrescido dos resultados realizados no encerramento. Não é drawdown intrabar de carteira multiativo.
+Fonte e contrato da API: Bybit V5 Get Kline, endpoint `GET /v5/market/kline`. A resposta é ordenada do candle mais recente para o mais antigo; o limite por página é 1.000 e os timestamps são em milissegundos. O coletor reordena e deduplica antes de testar. 
 
-## Testes de regressão
+## Protocolo temporal e execução
 
-A suíte deve comprovar, com candles sintéticos:
-1. Sinal com dados disponíveis até o fechamento atual e entrada na abertura seguinte.
-2. Alterar candles posteriores não modifica uma operação já encerrada.
-3. Taxa e slippage cobrados individualmente nos dois lados.
-4. Stop-first quando stop e alvo são tocados no mesmo candle.
-5. Drawdown não marcado antes do candle efetivo de entrada.
-6. Validação de OHLC e parâmetros numéricos inválidos.
+- Divisão cronológica fixa: 60% treino, 20% validação e 20% teste; nunca embaralhar.
+- 50 candles anteriores são usados apenas como aquecimento dos indicadores no início de cada partição; não geram trades nessa partição.
+- Sinal é confirmado no fechamento do candle; entrada simulada somente na abertura do candle seguinte.
+- Stop de 1% e alvo de 4,2%, iguais entre as estratégias e ativos nesta rodada.
+- Se stop e alvo forem tocados no mesmo candle, stop tem prioridade.
+- Gaps no stop são executados de forma adversa; liquidação no fim da partição inclui slippage e taxa de saída.
+- Capital virtual de 5.000 USDT e orçamento máximo de risco de 50 USDT por operação. Resultados são em USDT; não há conversão histórica USDT/BRL.
+- Cenário-base: taxa 0,10% por lado e slippage 0,25% por lado.
+- Cenário de estresse: taxa 0,20% por lado e slippage 0,50% por lado.
+- O dimensionamento considera stop, taxa e slippage dos dois lados.
 
-Testes sintéticos verificam a mecânica; não provam rentabilidade.
+## Métricas
 
-## Metodologia para procurar robustez (não prometer lucro constante)
+Por ativo, partição, estratégia e cenário, o relatório inclui número de operações, ganhos/perdas, taxa de acerto, P&L líquido em USDT, capital final, expectativa por operação, profit factor, drawdown máximo, taxas totais e saídas por stop/alvo/fim de amostra.
 
-### Hipóteses pré-registradas
-Comparar apenas regras simples e previamente definidas:
-- Baseline SMA 9/21.
-- Trend following SMA 20/50 com filtro de inclinação.
-- Momentum de 20 períodos com limiar de não negociação.
-- Breakout de 20 períodos com filtro de volatilidade ATR.
-- Mean reversion somente em regime lateral identificado sem dados futuros.
+## Limitações desta primeira rodada
 
-Não otimizar dezenas de combinações. Manter o mesmo conjunto de parâmetros em todos os ativos durante cada rodada e registrar qualquer alteração como nova hipótese.
+- O drawdown é marcado por fechamento de candle e resultados realizados; não representa drawdown intrabar de uma carteira multiativo.
+- Não há dados históricos de spread/livro de ofertas; slippage é uma hipótese fixa, testada em dois níveis.
+- Não há funding, pois o estudo é spot.
+- Não há benchmark buy-and-hold, entradas aleatórias, bootstrap, intervalos de confiança ou walk-forward móvel nesta primeira execução.
+- Cada partição começa com capital virtual independente e liquida eventual posição aberta no fim da janela. Os resultados entre partições não devem ser somados como se fossem uma única carteira contínua.
+- A divisão 60/20/20 é uma primeira auditoria temporal; os parâmetros não foram otimizados no treino nem selecionados na validação. O teste final permanece uma verificação fora da amostra para estas regras fixas.
 
-### Filtros de qualidade
-- Regime: tendência, lateralização e volatilidade elevada classificados usando somente candles fechados.
-- Volatilidade: ATR percentual para dimensionar risco; bloquear quando o stop necessário exceder o orçamento ou quando a volatilidade estiver fora da faixa definida no treino.
-- Custos: exigir retorno esperado estimado maior que taxa + slippage + margem de segurança antes de abrir operação.
-- Volume/força relativa: usar apenas se a fonte histórica for consistente e os campos estiverem disponíveis; ausência de volume não pode virar confirmação artificial.
-- Sem sinal: ficar em caixa é uma decisão válida. Não aumentar frequência para recuperar perdas.
+## Critérios para interpretação
 
-### Protocolo cronológico obrigatório
-1. Treino: primeira janela cronológica para formular e selecionar entre hipóteses pré-registradas.
-2. Validação: janela seguinte para escolher no máximo uma configuração por regra, sem consultar o teste final.
-3. Teste final: janela mais recente, intocada até congelar código, custos e parâmetros.
-4. Walk-forward: repetir seleção em janelas móveis e concatenar somente retornos fora da amostra.
-5. Purge/embargo: quando posições ou rótulos atravessarem limites entre janelas, remover observações sobrepostas e aplicar intervalo de segurança.
-6. Robustez: repetir com custos-base e custos dobrados; atrasar execução em um candle; testar por ativo, timeframe e regime.
-7. Estatística: bootstrap em blocos para intervalos de confiança e correção de seleção múltipla/Deflated Sharpe quando houver número suficiente de variantes.
+Não escolher uma estratégia apenas pelo maior lucro no treino. Dar prioridade ao teste final e à estabilidade por ativo, validação e cenário de estresse. Profit factor acima de 1 isoladamente não é suficiente: exigir amostra razoável, expectativa líquida positiva em mais de um ativo/janela, drawdown compatível com o risco e resiliência a custos maiores. Se poucas operações ocorrerem, classificar como inconclusivo.
 
-### Dados e métricas
-- Preferir candles históricos públicos da Bybit para XRPUSDT, BTCUSDT, ETHUSDT e SOLUSDT.
-- Guardar origem, timeframe, timestamp UTC, paginação, parâmetros, hash dos arquivos e contagem de lacunas/duplicatas.
-- Não misturar dados de outra corretora como se fossem Bybit. Se fallback for necessário, identificar claramente e executar como experimento separado.
-- Modelar taxa, slippage, spread, gaps e, quando aplicável, funding; spot long-only não deve incluir funding de perpétuos.
-- Reportar por ativo/timeframe e consolidado: número de trades, P&L líquido, profit factor, expectativa/trade, drawdown, exposição temporal, turnover, taxa de acerto, duração e intervalos de confiança.
-- Comparar com caixa, buy-and-hold e entradas aleatórias com as mesmas regras de saída e custos.
+Mesmo um backtest positivo não garante resultado futuro. Nenhum resultado desta branch autoriza ordens reais. Manter PAPER até auditoria independente, observação prospectiva e autorização explícita.
 
-## Critérios mínimos antes de qualquer recomendação operacional
+## Testes e automação
 
-Não basta lucro agregado positivo. Exigir amostra suficiente, expectativa líquida positiva em múltiplas janelas fora da amostra, profit factor acima de 1 após custos, drawdown compatível com o limite, estabilidade entre ativos/regimes e sobrevivência ao cenário de custos dobrados e atraso de execução. Os limites numéricos devem ser definidos antes do teste final, não escolhidos depois de ver os resultados.
+O workflow Research CI instala dependências, verifica sintaxe, executa `npm test`, baixa o histórico público e roda as cinco estratégias. O artefato `maxincome-research-backtest` deve conter CSVs históricos, qualidade dos dados, resumo CSV e relatório JSON. A aprovação só deve ser declarada depois de confirmar o resultado verde e inspecionar o artefato.
 
-Mesmo se esses critérios forem atingidos, manter PAPER por um período adicional de observação. Nenhum backtest garante resultado futuro.
-
-## Pendências
-
-- Executar `npm test` e todos os workflows desta branch.
-- Obter candles históricos Bybit sem substituir silenciosamente a fonte.
-- Implementar e auditar a divisão treino/validação/teste e walk-forward com janelas múltiplas.
-- Adicionar spread/impacto ou declarar claramente a limitação se os dados de livro não estiverem disponíveis.
-- Comparar as hipóteses pré-registradas e publicar artefatos reproduzíveis antes de qualquer alteração operacional.
+Os testes sintéticos verificam temporalidade, custos dos dois lados, prioridade do stop, validação OHLCV e bloqueio de execução. Eles não provam rentabilidade.
