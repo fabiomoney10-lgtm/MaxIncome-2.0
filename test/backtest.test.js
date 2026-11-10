@@ -62,7 +62,7 @@ test('entry and exit each charge fee and adverse slippage', () => {
   data[5].high = 101;
   data[5].low = 98;
   const result = backtestSma(data, {
-    ...shortPeriods, feeRate: 0.001, slippagePct: 0.0025
+    ...shortPeriods, feeRate: 0.001, slippagePct: 0.25
   });
   const trade = result.trades[0];
   assert.equal(trade.reason, 'STOP');
