@@ -30,7 +30,8 @@ function normalize(candles) {
     Number(c.high) >= Math.max(Number(c.open), Number(c.low), Number(c.close)))
     .map(c => ({
       open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close),
-      volume: Number.isFinite(Number(c.volume)) && Number(c.volume) >= 0 ? Number(c.volume) : null
+      volume: c.volume === null || c.volume === undefined || c.volume === '' ? null :
+        (Number.isFinite(Number(c.volume)) && Number(c.volume) >= 0 ? Number(c.volume) : null)
     }));
 }
 
@@ -68,11 +69,13 @@ function evaluateStrategySuite(candles) {
   const priorWindow = data.slice(-21, -1);
   const priorHigh = Math.max(...priorWindow.map(c => c.high));
   const priorLow = Math.min(...priorWindow.map(c => c.low));
-  const volumeValues = data.map(c => c.volume).filter(v => v !== null);
+  const recentVolumes = data.slice(-5).map(c => c.volume);
+  const baselineVolumes = data.slice(-25, -5).map(c => c.volume);
   let volumeRatio = null;
-  if (volumeValues.length >= 25) {
-    const recentVolume = average(volumeValues.slice(-5));
-    const baselineVolume = average(volumeValues.slice(-25, -5));
+  if (recentVolumes.length === 5 && baselineVolumes.length === 20 &&
+      recentVolumes.every(Number.isFinite) && baselineVolumes.every(Number.isFinite)) {
+    const recentVolume = average(recentVolumes);
+    const baselineVolume = average(baselineVolumes);
     if (baselineVolume > 0) volumeRatio = recentVolume / baselineVolume;
   }
 
