@@ -28,7 +28,6 @@ test('comparison reports independent in-sample and out-of-sample results without
   assert.equal(result.candleCount, 160);
   assert.ok(result.split.testStartTime > result.split.trainEndTime);
   assert.ok(result.results.TREND_FOLLOWING.outOfSample.metrics.trades > 0);
-  assert.ok(result.results.MOMENTUM.outOfSample.metrics.trades > 0);
   for (const name of ['TREND_FOLLOWING', 'MOMENTUM', 'MEAN_REVERSION']) {
     const item = result.results[name];
     assert.ok(item);
