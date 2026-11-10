@@ -34,7 +34,6 @@ jobs:
         run: npm test
 
   historical-backtest:
-    if: github.event_name == 'push'
     needs: test
     runs-on: ubuntu-latest
     steps:
