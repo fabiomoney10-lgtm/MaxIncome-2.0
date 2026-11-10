@@ -57,3 +57,18 @@ test('basic indicator helpers reject undersized data cleanly', () => {
   assert.equal(sma([1, 2], 3), null);
   assert.equal(rsi([1, 2, 3], 14), null);
 });
+
+test('momentum requires a complete recent volume window and honors weak volume', () => {
+  const candles = trendCandles();
+  for (let i = candles.length - 5; i < candles.length; i++) candles[i].volume = 50;
+  const result = evaluateStrategySuite(candles);
+  assert.equal(result.indicators.volumeRatio, 0.5);
+  assert.equal(result.strategies.momentum, 'NO_SETUP');
+});
+
+test('missing volume remains unavailable instead of being treated as zero volume', () => {
+  const candles = trendCandles();
+  for (const candle of candles) candle.volume = null;
+  const result = evaluateStrategySuite(candles);
+  assert.equal(result.indicators.volumeRatio, null);
+});
