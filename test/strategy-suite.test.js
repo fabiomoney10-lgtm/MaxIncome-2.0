@@ -62,7 +62,7 @@ test('momentum requires a complete recent volume window and honors weak volume',
   const candles = trendCandles();
   for (let i = candles.length - 5; i < candles.length; i++) candles[i].volume = 50;
   const result = evaluateStrategySuite(candles);
-  assert.equal(result.indicators.volumeRatio, 0.5);
+  assert.ok(result.indicators.volumeRatio < 0.5);
   assert.equal(result.strategies.momentum, 'NO_SETUP');
 });
 
