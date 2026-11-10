@@ -60,10 +60,8 @@ function backtestSma(candles, options = {}) {
       const closes = bars.slice(0, i).map(c => c.close);
       const fast = sma(closes, fastPeriod, closes.length);
       const slow = sma(closes, slowPeriod, closes.length);
-      const priorFast = sma(closes, fastPeriod, closes.length - 1);
-      const priorSlow = sma(closes, slowPeriod, closes.length - 1);
       const bullish = fast > slow && bar.close > fast;
-      if (bullish && !(priorFast > priorSlow)) {
+      if (bullish) {
         const nextOpen = bars[i + 1].open;
         const entry = nextOpen * (1 + slippagePct);
         // Size to a fixed gross stop budget, then cap notional to available cash.
