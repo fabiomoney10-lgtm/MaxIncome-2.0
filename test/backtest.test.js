@@ -88,6 +88,7 @@ test('when stop and target are touched in the same candle, stop wins conservativ
 test('drawdown does not mark a next-candle entry against the prior signal close', () => {
   const data = bullishSetup();
   data[5] = { start: 5, open: 120, high: 120.1, low: 119.9, close: 120 };
+  for (let i = 6; i < data.length; i++) data[i] = { start: i, open: 120, high: 120.1, low: 119.9, close: 120 };
   const result = backtestSma(data, {
     ...shortPeriods, stopPct: 50, targetPct: 50
   });
