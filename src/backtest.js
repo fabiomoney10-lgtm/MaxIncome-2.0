@@ -104,7 +104,7 @@ function backtestSma(candles, options = {}) {
       if (bullish) {
         const nextOpen = bars[i + 1].open;
         const entry = nextOpen * (1 + slippagePct);
-        const riskPerUnit = entry * (stopPct + slippagePct + feeRate * 2);
+        const riskPerUnit = entry * (stopPct + slippagePct * 2 + feeRate * 2);
         const quantity = Math.min(riskBudget / riskPerUnit, cash / (entry * (1 + feeRate)));
         if (quantity > 0 && Number.isFinite(quantity)) {
           const notional = entry * quantity;
