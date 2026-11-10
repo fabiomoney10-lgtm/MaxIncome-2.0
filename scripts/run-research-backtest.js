@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { backtestSignalStrategy } = require('../src/research-backtest');
 
 const SYMBOLS = ['XRPUSDT', 'BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
@@ -50,6 +51,8 @@ async function fetchHistory(symbol, startMs, endMs, nowMs) {
   const byTimestamp = new Map();
   let cursorEnd = endMs;
   let rawRows = 0;
+  let duplicateRows = 0;
+  let excludedUnclosedRows = 0;
   let pages = 0;
 
   while (cursorEnd >= startMs) {
@@ -64,7 +67,9 @@ async function fetchHistory(symbol, startMs, endMs, nowMs) {
       if (!Number.isFinite(timestamp)) continue;
       oldest = Math.min(oldest, timestamp);
       // Keep only fully closed 15-minute candles; never use the live partial candle.
-      if (timestamp < startMs || timestamp > endMs || timestamp + INTERVAL_MS > nowMs) continue;
+      if (timestamp < startMs || timestamp > endMs) continue;
+      if (timestamp + INTERVAL_MS > nowMs) { excludedUnclosedRows++; continue; }
+      if (byTimestamp.has(timestamp)) duplicateRows++;
       byTimestamp.set(timestamp, {
         start: timestamp,
         open: Number(row[1]),
@@ -106,7 +111,8 @@ async function fetchHistory(symbol, startMs, endMs, nowMs) {
       pages,
       rawRows,
       uniqueCandles: candles.length,
-      duplicateRows: rawRows - candles.length,
+      duplicateRows,
+      excludedUnclosedRows,
       missingIntervals: gaps,
       estimatedMissingCandles: missingCandles,
       firstCandleUtc: candles.length ? new Date(candles[0].start).toISOString() : null,
@@ -130,7 +136,7 @@ function runPartitions(symbol, candles) {
   ];
   const scenarios = [
     { name: 'base_cost', feeRate: 0.001, slippagePct: 0.25 },
-    { name: 'stress_cost', feeRate: 0.001, slippagePct: 0.5 }
+    { name: 'stress_cost', feeRate: 0.002, slippagePct: 0.5 }
   ];
   const results = [];
 
@@ -170,6 +176,7 @@ async function main() {
   const lastClosedStart = Math.floor(nowMs / INTERVAL_MS) * INTERVAL_MS - INTERVAL_MS;
   const allResults = [];
   const dataQuality = [];
+  const dataFiles = [];
   const dataManifest = {
     provider: 'Bybit V5 public market data',
     endpoint: BASE_URL,
@@ -196,6 +203,8 @@ async function main() {
       ].join(','));
     }
     fs.writeFileSync(candlePath, candleLines.join('\n') + '\n');
+    const candleSha256 = crypto.createHash('sha256').update(fs.readFileSync(candlePath)).digest('hex');
+    dataFiles.push({ symbol, file: path.basename(candlePath), sha256: candleSha256 });
 
     allResults.push(...runPartitions(symbol, candles));
     process.stdout.write(symbol + ': ' + candles.length + ' candles, ' + quality.missingIntervals + ' gaps.\n');
@@ -205,6 +214,7 @@ async function main() {
     generatedAtUtc: new Date().toISOString(),
     dataManifest,
     dataQuality,
+    dataFiles,
     methodology: {
       partitions: 'Chronological 60% train / 20% validation / 20% test; no shuffle',
       warmupCandles: 50,
@@ -212,6 +222,7 @@ async function main() {
       stopTarget: '1% stop / 4.2% target; stop wins if both levels are touched in the same candle',
       fees: '0.10% per side',
       slippage: '0.25% per side base; 0.50% per side stress',
+      fees: '0.10% per side base; 0.20% per side stress',
       sizing: '5,000 USDT virtual capital; 50 USDT max risk budget per trade',
       liquidation: 'Open position liquidated at the end of each partition with exit fee and slippage',
       quoteCurrency: 'USDT; no historical USDT/BRL conversion is applied',
