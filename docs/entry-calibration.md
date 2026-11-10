@@ -12,6 +12,10 @@ Esta branch é exclusivamente de pesquisa. Não altera `src/strategy.js`, `src/p
 - Taxa de referência: 0,1% por lado. Buffer de risco atual: 0,25% para slippage/gap. O buffer de risco não substitui a modelagem de fill no backtest.
 - O histórico PAPER previamente reconciliado contém duas perdas, XRP e ETH, totalizando -R$65,24. Duas operações não permitem inferir vantagem estatística.
 
+## Sinais candidatos de pesquisa (sem integração ao motor)
+
+O módulo `src/research-strategies.js` expõe diagnósticos long-only e independentes: baseline SMA 9/21, trend following SMA 20/50 com inclinação, momentum de 20 candles, breakout de 20 candles com filtro ATR e confirmação de volume quando disponível, e mean reversion somente em regime lateral com RSI e banda estatística. O regime de alta volatilidade bloqueia a classificação de tendência. O módulo exige 51 candles válidos e retorna explicitamente `executionEnabled:false` e `tradeAllowed:false`. RSI usa média simples de ganhos/perdas (não Wilder); thresholds são hipóteses pré-definidas, não parâmetros calibrados nem comprovadamente rentáveis. O módulo não é importado pelo PaperTrader.
+
 ## Correções no backtester desta branch
 
 - O sinal SMA é calculado incluindo o fechamento do candle de sinal, que é a informação disponível no momento da decisão.
