@@ -29,6 +29,8 @@ test('backtest validates OHLC and parameters',()=>{
 
 test('when stop and target are touched in the same candle, stop wins conservatively',()=>{
  const data=bars([100,99,98,99,100,102,104,106,108,110,112,114,116,118,120,122,124,126,128,130,132,134,136,138,140,142,144,146,148,150,152,154,156,158,160]);
- const result=backtestSma(data,{fastPeriod:2,slowPeriod:3,stopPct:1,targetPct:0.1,feeRate:0,slippagePct:0});
- assert.ok(result.trades.every(t=>t.reason==='STOP' || t.reason==='END_OF_DATA' || t.reason==='TARGET'));
+ data[6].high=110;
+ data[6].low=100;
+ const result=backtestSma(data,{fastPeriod:2,slowPeriod:3,stopPct:1,targetPct:1.5,feeRate:0,slippagePct:0});
+ assert.equal(result.trades[0].reason,'STOP');
 });
