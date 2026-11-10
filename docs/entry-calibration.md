@@ -60,6 +60,6 @@ Mesmo um backtest positivo não garante resultado futuro. Nenhum resultado desta
 
 ## Testes e automação
 
-O workflow Research CI instala dependências, verifica sintaxe, executa `npm test`, baixa o histórico público e roda as cinco estratégias. O artefato `maxincome-research-backtest` deve conter CSVs históricos, qualidade dos dados, resumo CSV e relatório JSON. A aprovação só deve ser declarada depois de confirmar o resultado verde e inspecionar o artefato.
+O workflow Research CI instala dependências, verifica sintaxe e executa `npm test`. A coleta histórica é uma execução separada: os runners hospedados do GitHub podem sair por IP dos Estados Unidos, que a Bybit bloqueia com HTTP 403. Execute `npm run research:backtest` em um computador/ambiente cuja origem seja autorizada pela Bybit (para conta internacional brasileira, a documentação indica `api.bybit.com`). O comando gera CSVs históricos, hashes SHA-256, qualidade dos dados, resumo CSV e relatório JSON em `artifacts/research/`. Não use proxy nem altere a origem para contornar restrição geográfica.
 
 Os testes sintéticos verificam temporalidade, custos dos dois lados, prioridade do stop, validação OHLCV e bloqueio de execução. Eles não provam rentabilidade.
