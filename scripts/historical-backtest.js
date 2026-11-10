@@ -10,10 +10,11 @@ const { calculateMinimumTargetPct, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require(
 const SYMBOLS = ['XRPUSDT', 'BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
 const INTERVALS = ['15', '60', '240', 'D'];
 const TARGET_CANDLES = 3000;
+let bybitBlocked = false;
 const PAGE_SIZE = 1000;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-async function fetchHistory(client, symbol, interval) {
+async function fetchBybitHistory(client, symbol, interval) {
   const byStart = new Map();
   let end = Date.now();
   for (let page = 0; page < Math.ceil(TARGET_CANDLES / PAGE_SIZE); page++) {
@@ -25,14 +26,7 @@ async function fetchHistory(client, symbol, interval) {
     let oldest = Infinity;
     for (const row of rows) {
       const start = Number(row[0]);
-      const candle = {
-        start,
-        open: Number(row[1]),
-        high: Number(row[2]),
-        low: Number(row[3]),
-        close: Number(row[4]),
-        volume: Number(row[5])
-      };
+      const candle = { start, open:Number(row[1]), high:Number(row[2]), low:Number(row[3]), close:Number(row[4]), volume:Number(row[5]) };
       const candleEnd = candleEndTime(start, interval);
       if (!Number.isFinite(start) || !Number.isFinite(candleEnd) || candleEnd > Date.now() ||
           ![candle.open,candle.high,candle.low,candle.close].every(Number.isFinite) ||
@@ -47,6 +41,52 @@ async function fetchHistory(client, symbol, interval) {
     await sleep(150);
   }
   return Array.from(byStart.values()).sort((a,b)=>a.start-b.start).slice(-TARGET_CANDLES);
+}
+
+async function fetchBinanceHistory(symbol, interval) {
+  const binanceIntervals = { '15':'15m', '60':'1h', '240':'4h', 'D':'1d' };
+  const byStart = new Map();
+  let endTime = Date.now();
+  for (let page = 0; page < Math.ceil(TARGET_CANDLES / PAGE_SIZE); page++) {
+    const url = new URL('https://api.binance.com/api/v3/klines');
+    url.search = new URLSearchParams({ symbol, interval:binanceIntervals[interval], limit:String(PAGE_SIZE), endTime:String(endTime) }).toString();
+    const response = await fetch(url, { signal:AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error('Binance HTTP ' + response.status);
+    const rows = await response.json();
+    if (!Array.isArray(rows) || !rows.length) break;
+    let oldest = Infinity;
+    for (const row of rows) {
+      const candle = { start:Number(row[0]), open:Number(row[1]), high:Number(row[2]), low:Number(row[3]), close:Number(row[4]), volume:Number(row[5]) };
+      const closeTime = Number(row[6]);
+      if (!Number.isFinite(candle.start) || !Number.isFinite(closeTime) || closeTime >= Date.now() ||
+          ![candle.open,candle.high,candle.low,candle.close,candle.volume].every(Number.isFinite) ||
+          candle.open <= 0 || candle.volume < 0 || candle.high < Math.max(candle.open,candle.close,candle.low) ||
+          candle.low > Math.min(candle.open,candle.close,candle.high)) continue;
+      byStart.set(candle.start,candle);
+      oldest = Math.min(oldest,candle.start);
+    }
+    if (!Number.isFinite(oldest) || rows.length < PAGE_SIZE) break;
+    endTime = oldest - 1;
+    await sleep(150);
+  }
+  return Array.from(byStart.values()).sort((a,b)=>a.start-b.start).slice(-TARGET_CANDLES);
+}
+
+async function fetchMarketHistory(client, symbol, interval) {
+  if (!bybitBlocked) {
+    try {
+      return { candles:await fetchBybitHistory(client,symbol,interval), source:'Bybit Spot' };
+    } catch (error) {
+      if (!String(error.message).includes('HTTP 403')) throw error;
+      bybitBlocked = true;
+      console.warn('Bybit public API blocked from this runner (HTTP 403); using clearly labeled Binance Spot reference data.');
+    }
+  }
+  try {
+    return { candles:await fetchBinanceHistory(symbol,interval), source:'Binance Spot fallback (not Bybit execution data)' };
+  } catch (error) {
+    return { candles:[], source:'unavailable', error:String(error.message || error) };
+  }
 }
 
 function metricsForSma(candles, splitIndex) {
@@ -66,7 +106,7 @@ async function main() {
   const client = new BybitClient({ testnet: true });
   const report = {
     generatedAt: new Date().toISOString(),
-    source: 'Bybit public spot OHLCV candles',
+    source: 'Bybit public spot OHLCV; if HTTP 403 blocks access, clearly labeled Binance Spot reference fallback',
     assumptions: {
       symbols: SYMBOLS, intervals: INTERVALS, targetCandlesPerSeries: TARGET_CANDLES,
       initialCapitalQuote: 5000, riskPerTradeQuote: 50, stopLossPct: 1,
@@ -83,10 +123,12 @@ async function main() {
 
   for (const symbol of SYMBOLS) {
     for (const interval of INTERVALS) {
-      const candles = await fetchHistory(client, symbol, interval);
-      const entry = { symbol, interval, candleCount: candles.length };
+      const fetched = await fetchMarketHistory(client, symbol, interval);
+      const candles = fetched.candles;
+      const entry = { symbol, interval, source:fetched.source, candleCount: candles.length };
+      if (fetched.error) entry.error = fetched.error;
       if (candles.length < 110) {
-        entry.status = 'INSUFFICIENT_HISTORY';
+        entry.status = fetched.error ? 'DATA_UNAVAILABLE' : 'INSUFFICIENT_HISTORY';
         report.series.push(entry);
         continue;
       }
@@ -123,20 +165,20 @@ async function main() {
     '',
     'Custos simulados: taxa 0,1% por lado e slippage adverso 0,25% por lado. Entrada no candle seguinte; stop-first quando stop e alvo aparecem no mesmo candle.',
     '',
-    '| Ativo | Período | Candles | SMA 9/21 OOS trades | SMA 9/21 OOS líquido | SMA PF | Trend OOS líquido | Momentum OOS líquido | Mean reversion OOS líquido |',
-    '|---|---:|---:|---:|---:|---:|---:|---:|---:|'
+    '| Ativo | Fonte | Período | Candles | SMA 9/21 OOS trades | SMA 9/21 OOS líquido | SMA PF | Trend OOS líquido | Momentum OOS líquido | Mean reversion OOS líquido |',
+    '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|'
   ];
   for (const item of report.series) {
     if (item.status !== 'OK') {
-      lines.push(`| ${item.symbol} / ${item.interval} | — | ${item.candleCount} | — | — | — | — | — | — |`);
+      lines.push(`| ${item.symbol} / ${item.interval} | ${item.source} | — | ${item.candleCount} | — | — | — | — | — | — |`);
       continue;
     }
     const sma = item.baselineSma9x21.outOfSample;
     const suite = item.strategySuite;
-    lines.push(`| ${item.symbol} / ${item.interval} | ${item.start.slice(0,10)}–${item.end.slice(0,10)} | ${item.candleCount} | ${sma.trades} | ${sma.netPnl.toFixed(2)} | ${sma.profitFactor === null ? 'n/a' : sma.profitFactor.toFixed(2)} | ${suite.TREND_FOLLOWING.outOfSample.netPnl.toFixed(2)} | ${suite.MOMENTUM.outOfSample.netPnl.toFixed(2)} | ${suite.MEAN_REVERSION.outOfSample.netPnl.toFixed(2)} |`);
+    lines.push(`| ${item.symbol} / ${item.interval} | ${item.source} | ${item.start.slice(0,10)}–${item.end.slice(0,10)} | ${item.candleCount} | ${sma.trades} | ${sma.netPnl.toFixed(2)} | ${sma.profitFactor === null ? 'n/a' : sma.profitFactor.toFixed(2)} | ${suite.TREND_FOLLOWING.outOfSample.netPnl.toFixed(2)} | ${suite.MOMENTUM.outOfSample.netPnl.toFixed(2)} | ${suite.MEAN_REVERSION.outOfSample.netPnl.toFixed(2)} |`);
   }
   lines.push('', '## Limitações', '', ...report.assumptions.limitations.map(value => '- ' + value),
-    '', 'Este relatório é pesquisa histórica, não recomendação de investimento nem prova de vantagem futura.');
+    '', 'Se a fonte for Binance Spot fallback, os preços são referência de mercado e não candles da Bybit; diferenças de spread/liquidez e execução limitam a equivalência.', '', 'Este relatório é pesquisa histórica, não recomendação de investimento nem prova de vantagem futura.');
   await fs.writeFile(path.join(outputDir, 'historical-backtest.md'), lines.join('\n') + '\n');
   console.log('Historical backtest report written to reports/.');
 }
