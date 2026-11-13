@@ -198,13 +198,21 @@ class PaperTrader {
 
   async getStatus() {
     const day = getTradingDate();
-    const [settings, daily, open, recent, events, reserved] = await Promise.all([
+    const [settings, daily, open, recent, events, reserved, performance] = await Promise.all([
       this.pool.query('SELECT initial_capital_brl,max_risk_per_trade_brl,max_daily_loss_brl,max_trades_per_day,max_exposure_brl,stop_loss_pct,take_profit_pct,fee_rate_per_side,trading_enabled FROM public.paper_settings WHERE id=1'),
       this.pool.query('SELECT * FROM public.paper_daily_state WHERE trading_date=$1',[day]),
       this.pool.query("SELECT id,symbol,quantity,entry_price,stop_price,take_profit_price,entry_value_brl,risk_brl,opened_at FROM public.paper_trades WHERE status='OPEN' ORDER BY opened_at DESC"),
       this.pool.query("SELECT id,symbol,quantity,entry_price,exit_price,exit_reason,pnl_net_brl,status,opened_at,closed_at FROM public.paper_trades ORDER BY opened_at DESC LIMIT 20"),
       this.pool.query("SELECT event_type,symbol,message,created_at FROM public.paper_events ORDER BY created_at DESC LIMIT 20"),
-      this.pool.query("SELECT COALESCE(sum(risk_brl + CASE WHEN COALESCE(metadata->>'slippageBufferPct','') = '' THEN entry_value_brl * 0.0025 ELSE 0 END),0) AS reserved_risk FROM public.paper_trades WHERE status='OPEN'")
+      this.pool.query("SELECT COALESCE(sum(risk_brl + CASE WHEN COALESCE(metadata->>'slippageBufferPct','') = '' THEN entry_value_brl * 0.0025 ELSE 0 END),0) AS reserved_risk FROM public.paper_trades WHERE status='OPEN'"),
+      this.pool.query(`SELECT
+        COUNT(*) FILTER (WHERE status='CLOSED')::int AS closed_trades,
+        COUNT(*) FILTER (WHERE status='CLOSED' AND pnl_net_brl > 0)::int AS winning_trades,
+        COALESCE(SUM(pnl_gross_brl) FILTER (WHERE status='CLOSED'),0) AS gross_brl,
+        COALESCE(SUM(fees_total_brl) FILTER (WHERE status='CLOSED'),0) AS fees_brl,
+        COALESCE(SUM(pnl_net_brl) FILTER (WHERE status='CLOSED'),0) AS net_brl,
+        COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE status='CLOSED' AND pnl_net_brl > 0) / NULLIF(COUNT(*) FILTER (WHERE status='CLOSED'),0),1),0) AS win_rate_pct
+        FROM public.paper_trades`)
     ]);
     const cfg = settings.rows[0] || {};
     const state = daily.rows[0] || {};
@@ -233,6 +241,7 @@ class PaperTrader {
       daily: state,
       openPositions: open.rows,
       recentTrades: recent.rows,
+      performance: performance.rows[0] || {},
       events: events.rows
     };
   }
