@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { runBacktest, normalizeCandles, lastCompletedHourlyIndex, lastCompletedIndex } = require('../src/backtest');
+const { runBacktest, normalizeCandles, lastCompletedHourlyIndex, lastCompletedIndex, aggregateBacktests } = require('../src/backtest');
 const { calculateAdx, analyzeTrendPullback } = require('../src/strategy');
 
 const FIFTEEN = 15 * 60 * 1000;
@@ -103,4 +103,33 @@ test('ADX returns directional strength data for a valid OHLC series', () => {
   const result = calculateAdx(candles, 14);
   assert.ok(result && Number.isFinite(result.adx));
   assert.ok(result.plusDi > result.minusDi);
+});
+
+test('portfolio aggregation combines assets and preserves chronological drawdown inputs', () => {
+  const trade = (entryTime, exitTime, netPnl) => ({
+    entryTime, exitTime, netPnl, fees: 1
+  });
+  const splitAt = '2026-06-01T00:00:00.000Z';
+  const result = aggregateBacktests([
+    { data: { splitAt }, trades: [
+      trade('2026-05-30T00:00:00.000Z', '2026-05-30T01:00:00.000Z', 10),
+      trade('2026-06-02T00:00:00.000Z', '2026-06-02T01:00:00.000Z', -5)
+    ] },
+    { data: { splitAt }, trades: [
+      trade('2026-05-29T00:00:00.000Z', '2026-05-29T01:00:00.000Z', -3),
+      trade('2026-06-03T00:00:00.000Z', '2026-06-03T01:00:00.000Z', 7)
+    ] }
+  ]);
+  assert.equal(result.assets, 2);
+  assert.equal(result.initialCapitalTotal, 10000);
+  assert.equal(result.all.trades, 4);
+  assert.equal(result.all.netPnl, 9);
+  assert.equal(result.all.profitFactor, 2.125);
+  assert.equal(result.inSample.netPnl, 7);
+  assert.equal(result.outOfSample.netPnl, 2);
+});
+
+test('portfolio aggregation rejects missing or invalid inputs', () => {
+  assert.throws(() => aggregateBacktests([], 5000), /precisam ser válidos/);
+  assert.throws(() => aggregateBacktests([{}], 0), /precisam ser válidos/);
 });
