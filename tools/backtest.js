@@ -1,7 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
-const { runBacktest } = require('../src/backtest');
+const { runBacktest, aggregateBacktests } = require('../src/backtest');
 
 const BYBIT_BASE_URL = 'https://api.bybit.com';
 const BINANCE_BASE_URL = 'https://data-api.binance.vision';
@@ -112,6 +112,7 @@ async function main() {
     sourcePolicy: 'Prefer Bybit spot mainnet. If Bybit blocks or lacks history, use Binance spot public data as a clearly labeled cross-exchange proxy. No authenticated endpoints.',
     daysRequested: DAYS,
     quoteCurrency: 'USDT (P&L remains in USDT; no invented historical USD/BRL conversion)',
+    capitalAssumption: '5,000 USDT por ativo; agregado considera 20,000 USDT iniciais para quatro ativos independentes',
     symbols: {}
   };
   for (const symbol of SYMBOLS) {
@@ -132,10 +133,24 @@ async function main() {
       `enhanced ${e.netPnl} USDT / WR ${e.winRatePct}% | pullback ${t.trades} trades, ${t.netPnl} USDT / WR ${t.winRatePct}%\n`
     );
   }
+  const symbolResults = Object.values(report.symbols);
+  report.aggregate = {
+    baseline: aggregateBacktests(symbolResults.map(x => x.baseline)),
+    enhanced: aggregateBacktests(symbolResults.map(x => x.enhanced)),
+    trendPullback: aggregateBacktests(symbolResults.map(x => x.trendPullback))
+  };
   const serialized = JSON.stringify(report, null, 2);
   const outputPath = process.env.BACKTEST_OUTPUT || 'backtest-report.json';
   fs.writeFileSync(outputPath, serialized + '\n', 'utf8');
   process.stdout.write('\nRELATÓRIO COMPLETO (JSON) salvo em ' + outputPath + '\n');
+  for (const [label, key] of [['BASE', 'baseline'], ['APRIMORADA', 'enhanced'], ['TENDÊNCIA+ADX+PULLBACK', 'trendPullback']]) {
+    const m = report.aggregate[key].outOfSample;
+    process.stdout.write(
+      `AGREGADO ${label} OOS | trades=${m.trades} | winRate=${m.winRatePct}% | ` +
+      `net=${m.netPnl} USDT | PF=${m.profitFactor} | DD=${m.maxDrawdownPct}% | ` +
+      `capital inicial=${report.aggregate[key].initialCapitalTotal} USDT\\n`
+    );
+  }
   for (const [symbol, result] of Object.entries(report.symbols)) {
     for (const [label, key] of [['BASE', 'baseline'], ['APRIMORADA', 'enhanced'], ['TENDÊNCIA+ADX+PULLBACK', 'trendPullback']]) {
       const m = result[key].outOfSample;
