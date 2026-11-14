@@ -87,6 +87,33 @@ function metrics(trades, initialCapital) {
   };
 }
 
+
+function aggregateBacktests(backtests, initialCapitalPerAsset = 5000) {
+  if (!Array.isArray(backtests) || backtests.length === 0 ||
+      !Number.isFinite(initialCapitalPerAsset) || initialCapitalPerAsset <= 0) {
+    throw new TypeError('Backtests e capital inicial por ativo precisam ser válidos.');
+  }
+  const collect = segment => {
+    const trades = backtests.flatMap(result => {
+      if (!result || !Array.isArray(result.trades) || !result.data || !result.data.splitAt) return [];
+      if (segment === 'all') return result.trades;
+      const splitAt = Date.parse(result.data.splitAt);
+      return result.trades.filter(trade => segment === 'inSample'
+        ? Date.parse(trade.entryTime) < splitAt
+        : Date.parse(trade.entryTime) >= splitAt);
+    }).sort((a, b) => Date.parse(a.exitTime) - Date.parse(b.exitTime));
+    return metrics(trades, initialCapitalPerAsset * backtests.length);
+  };
+  return {
+    assets: backtests.length,
+    initialCapitalPerAsset,
+    initialCapitalTotal: Number((initialCapitalPerAsset * backtests.length).toFixed(2)),
+    all: collect('all'),
+    inSample: collect('inSample'),
+    outOfSample: collect('outOfSample')
+  };
+}
+
 function runBacktest({
   candles15m,
   candles1h,
@@ -250,4 +277,4 @@ function runBacktest({
   };
 }
 
-module.exports = { runBacktest, normalizeCandles, baselineSignal, lastCompletedHourlyIndex, lastCompletedIndex, metrics };
+module.exports = { runBacktest, normalizeCandles, baselineSignal, lastCompletedHourlyIndex, lastCompletedIndex, metrics, aggregateBacktests };
