@@ -35,4 +35,15 @@ function calculateRiskPerUnitBRL({ entryPrice, fxRate, stopLossPct, feeRatePerSi
   return entry * fx * ((stopPct + slippage) / 100 + fee * 2);
 }
 
-module.exports = { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT };
+function calculateStopExecutionPrice({ marketPrice, stopPrice, slippageBufferPct = DEFAULT_STOP_SLIPPAGE_BUFFER_PCT }) {
+  const values = [marketPrice, stopPrice, slippageBufferPct].map(Number);
+  if (values.some(value => !Number.isFinite(value)) || values[0] <= 0 || values[1] <= 0 || values[2] < 0) {
+    throw new TypeError('Parâmetros inválidos para estimar o preço de execução do stop.');
+  }
+  const [market, stop, slippage] = values;
+  // Conservative PAPER fill: use the worse of the observed market and the
+  // stop price adjusted by the modeled adverse-slippage allowance.
+  return Math.min(market, stop * (1 - slippage / 100));
+}
+
+module.exports = { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, calculateStopExecutionPrice, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT };
