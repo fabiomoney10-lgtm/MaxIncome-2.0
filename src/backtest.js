@@ -39,6 +39,13 @@ function baselineSignal(candles) {
     ? 'BULLISH' : 'WAIT';
 }
 
+function lastCompletedHourlyIndex(hourly, decisionTime, currentIndex = -1) {
+  let index = currentIndex;
+  while (index + 1 < hourly.length &&
+    hourly[index + 1].start + INTERVAL_1H_MS <= decisionTime) index += 1;
+  return index;
+}
+
 function metrics(trades, initialCapital) {
   const wins = trades.filter(t => t.netPnl > 0);
   const losses = trades.filter(t => t.netPnl < 0);
@@ -150,8 +157,7 @@ function runBacktest({
     }
 
     const decisionTime = candle.start + INTERVAL_15M_MS;
-    while (hourlyIndex + 1 < hourly.length &&
-      hourly[hourlyIndex + 1].start + INTERVAL_1H_MS <= decisionTime) hourlyIndex += 1;
+    hourlyIndex = lastCompletedHourlyIndex(hourly, decisionTime, hourlyIndex);
 
     const history15m = bars.slice(0, i + 1);
     const history1h = hourly.slice(0, hourlyIndex + 1);
@@ -223,4 +229,4 @@ function runBacktest({
   };
 }
 
-module.exports = { runBacktest, normalizeCandles, baselineSignal, metrics };
+module.exports = { runBacktest, normalizeCandles, baselineSignal, lastCompletedHourlyIndex, metrics };
