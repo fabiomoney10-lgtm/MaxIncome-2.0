@@ -92,7 +92,7 @@ class PaperTrader {
           );
           await client.query(
             'INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,$2,$3,$4,$5)',
-            [trade.id, reason === 'STOP_LOSS' ? 'STOP_TRIGGERED' : 'TARGET_TRIGGERED', trade.symbol, 'Posição PAPER encerrada por nível de preço.', JSON.stringify({ observedPrice: price, fillPrice, slippageBufferPct: reason === 'STOP_LOSS' ? slippageBufferPct : 0, gross, fees, net })]
+            [trade.id, reason === 'STOP_LOSS' ? 'STOP_TRIGGERED' : 'TARGET_TRIGGERED', trade.symbol, 'Posição PAPER encerrada por nível de preço.', JSON.stringify({ observedPrice: price, fillPrice, slippageBufferPct: reason === 'STOP_LOSS' ? slippageBufferPct : 0, modeledRiskBRL: Number(trade.risk_brl), riskOverrunBRL: Math.max(0, -net - Number(trade.risk_brl)), gross, fees, net })]
           );
           realizedDelta += net;
         }
