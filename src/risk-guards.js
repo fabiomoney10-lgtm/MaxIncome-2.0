@@ -35,4 +35,38 @@ function calculateRiskPerUnitBRL({ entryPrice, fxRate, stopLossPct, feeRatePerSi
   return entry * fx * ((stopPct + slippage) / 100 + fee * 2);
 }
 
-module.exports = { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT };
+function calculateStopExecutionPrice({ marketPrice, stopPrice, slippageBufferPct = DEFAULT_STOP_SLIPPAGE_BUFFER_PCT }) {
+  const values = [marketPrice, stopPrice, slippageBufferPct].map(Number);
+  if (values.some(value => !Number.isFinite(value)) || values[0] <= 0 || values[1] <= 0 || values[2] < 0) {
+    throw new TypeError('Parâmetros inválidos para estimar o preço de execução do stop.');
+  }
+  const [market, stop, slippage] = values;
+  // Conservative PAPER fill: use the worse of the observed market and the
+  // stop price adjusted by the modeled adverse-slippage allowance.
+  return Math.min(market, stop * (1 - slippage / 100));
+}
+
+function calculatePositionSizeBRL({ entryPrice, fxRate, stopLossPct, feeRatePerSide, riskBudgetBRL, maxNotionalBRL, slippageBufferPct = DEFAULT_STOP_SLIPPAGE_BUFFER_PCT }) {
+  const values = [entryPrice, fxRate, stopLossPct, feeRatePerSide, riskBudgetBRL, maxNotionalBRL, slippageBufferPct].map(Number);
+  if (values.some(value => !Number.isFinite(value)) || values[0] <= 0 || values[1] <= 0 ||
+      values[2] <= 0 || values[3] < 0 || values[4] <= 0 || values[5] <= 0 || values[6] < 0) {
+    throw new TypeError('Parâmetros inválidos para calcular o tamanho da posição.');
+  }
+  const [entry, fx, stopPct, fee, budget, maxNotional, slippage] = values;
+  const riskPerUnitBRL = calculateRiskPerUnitBRL({
+    entryPrice: entry, fxRate: fx, stopLossPct: stopPct,
+    feeRatePerSide: fee, slippageBufferPct: slippage
+  });
+  const quantity = Math.min(budget / riskPerUnitBRL, maxNotional / (entry * fx));
+  const notionalBRL = quantity * entry * fx;
+  const modeledRiskBRL = quantity * riskPerUnitBRL;
+  if (!(quantity > 0) || !Number.isFinite(notionalBRL) || modeledRiskBRL > budget + 0.000001) {
+    return { quantity: 0, notionalBRL: 0, modeledRiskBRL: 0, riskPerUnitBRL };
+  }
+  return { quantity, notionalBRL, modeledRiskBRL, riskPerUnitBRL };
+}
+
+module.exports = {
+  getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL,
+  calculateStopExecutionPrice, calculatePositionSizeBRL, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT
+};

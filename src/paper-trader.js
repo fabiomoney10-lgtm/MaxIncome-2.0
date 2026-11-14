@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
-const { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require('./risk-guards');
+const { getTradingDate, calculateAvailableDailyRisk, calculatePositionSizeBRL, calculateStopExecutionPrice, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require('./risk-guards');
 
 function createPool(connectionString) {
   if (!connectionString) throw new Error('DATABASE_URL não configurada; motor PAPER permanece bloqueado.');
@@ -77,18 +77,22 @@ class PaperTrader {
           if (!reason) continue;
           const tradeFx = Number((trade.metadata && trade.metadata.fxUsdBrl) || fx || 0);
           if (!(tradeFx > 0)) continue;
-          const gross = (price - Number(trade.entry_price)) * Number(trade.quantity) * tradeFx;
+          const slippageBufferPct = Number((trade.metadata && trade.metadata.slippageBufferPct) ?? DEFAULT_STOP_SLIPPAGE_BUFFER_PCT);
+          const fillPrice = reason === 'STOP_LOSS'
+            ? calculateStopExecutionPrice({ marketPrice: price, stopPrice: Number(trade.stop_price), slippageBufferPct })
+            : price;
+          const gross = (fillPrice - Number(trade.entry_price)) * Number(trade.quantity) * tradeFx;
           const entryFee = Number(trade.estimated_entry_fee_brl);
-          const exitFee = price * Number(trade.quantity) * tradeFx * Number(settings.fee_rate_per_side);
+          const exitFee = fillPrice * Number(trade.quantity) * tradeFx * Number(settings.fee_rate_per_side);
           const fees = entryFee + exitFee;
           const net = gross - fees;
           await client.query(
             "UPDATE public.paper_trades SET status='CLOSED', exit_price=$1, exit_reason=$2, pnl_gross_brl=$3, fees_total_brl=$4, pnl_net_brl=$5, closed_at=now() WHERE id=$6",
-            [price, reason, gross, fees, net, trade.id]
+            [fillPrice, reason, gross, fees, net, trade.id]
           );
           await client.query(
             'INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,$2,$3,$4,$5)',
-            [trade.id, reason === 'STOP_LOSS' ? 'STOP_TRIGGERED' : 'TARGET_TRIGGERED', trade.symbol, 'Posição PAPER encerrada por nível de preço.', JSON.stringify({ price, gross, fees, net })]
+            [trade.id, reason === 'STOP_LOSS' ? 'STOP_TRIGGERED' : 'TARGET_TRIGGERED', trade.symbol, 'Posição PAPER encerrada por nível de preço.', JSON.stringify({ observedPrice: price, fillPrice, slippageBufferPct: reason === 'STOP_LOSS' ? slippageBufferPct : 0, modeledRiskBRL: Number(trade.risk_brl), riskOverrunBRL: Math.max(0, -net - Number(trade.risk_brl)), gross, fees, net })]
           );
           realizedDelta += net;
         }
@@ -141,22 +145,27 @@ class PaperTrader {
             const alreadyOpen = await client.query("SELECT 1 FROM public.paper_trades WHERE symbol=$1 AND status='OPEN' LIMIT 1", [symbol]);
             if (alreadyOpen.rowCount) continue;
             const entry = Number(ticker.lastPrice);
-            const stop = entry * (1 - Number(settings.stop_loss_pct) / 100);
-            const stopPct = Number(settings.stop_loss_pct) / 100;
+            const stopPct = Number(settings.stop_loss_pct);
             const feePct = Number(settings.fee_rate_per_side) * 2;
-            const riskPerUnitBrl = calculateRiskPerUnitBRL({ entryPrice: entry, fxRate: fx, stopLossPct: Number(settings.stop_loss_pct), feeRatePerSide: Number(settings.fee_rate_per_side) });
-            if (!(riskPerUnitBrl > 0)) continue;
             const requestedRisk = Math.min(Number(settings.max_risk_per_trade_brl), Number(settings.initial_capital_brl) * 0.01, availableDailyRisk);
-            const riskLimitedQty = requestedRisk / riskPerUnitBrl;
             const remainingExposure = Math.max(0, Number(settings.max_exposure_brl) - openExposure);
             const equity = Number(settings.initial_capital_brl) + Number(state.realized_pnl_brl) + unrealized;
             const remainingCapital = Math.max(0, equity - openExposure);
             const maxNotional = Math.min(remainingExposure, remainingCapital);
-            const qty = Math.min(riskLimitedQty, maxNotional / (entry * fx));
-            const notional = qty * entry * fx;
-            const actualRisk = qty * riskPerUnitBrl;
+            const sizing = calculatePositionSizeBRL({
+              entryPrice: entry,
+              fxRate: fx,
+              stopLossPct: stopPct,
+              feeRatePerSide: Number(settings.fee_rate_per_side),
+              riskBudgetBRL: requestedRisk,
+              maxNotionalBRL: maxNotional
+            });
+            const qty = sizing.quantity;
+            const notional = sizing.notionalBRL;
+            const actualRisk = sizing.modeledRiskBRL;
+            const stop = entry * (1 - stopPct / 100);
             if (!(qty > 0) || actualRisk > requestedRisk + 0.01 || notional < 10) continue;
-            const minimumNetTwoToOneMove = 2 * (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT / 100 + feePct) + feePct;
+            const minimumNetTwoToOneMove = 2 * (stopPct / 100 + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT / 100 + feePct) + feePct;
             const configuredTargetMove = Number(settings.take_profit_pct) / 100;
             const takeProfit = entry * (1 + Math.max(configuredTargetMove, minimumNetTwoToOneMove));
             const entryFee = notional * Number(settings.fee_rate_per_side);
@@ -198,13 +207,21 @@ class PaperTrader {
 
   async getStatus() {
     const day = getTradingDate();
-    const [settings, daily, open, recent, events, reserved] = await Promise.all([
+    const [settings, daily, open, recent, events, reserved, performance] = await Promise.all([
       this.pool.query('SELECT initial_capital_brl,max_risk_per_trade_brl,max_daily_loss_brl,max_trades_per_day,max_exposure_brl,stop_loss_pct,take_profit_pct,fee_rate_per_side,trading_enabled FROM public.paper_settings WHERE id=1'),
       this.pool.query('SELECT * FROM public.paper_daily_state WHERE trading_date=$1',[day]),
       this.pool.query("SELECT id,symbol,quantity,entry_price,stop_price,take_profit_price,entry_value_brl,risk_brl,opened_at FROM public.paper_trades WHERE status='OPEN' ORDER BY opened_at DESC"),
       this.pool.query("SELECT id,symbol,quantity,entry_price,exit_price,exit_reason,pnl_net_brl,status,opened_at,closed_at FROM public.paper_trades ORDER BY opened_at DESC LIMIT 20"),
       this.pool.query("SELECT event_type,symbol,message,created_at FROM public.paper_events ORDER BY created_at DESC LIMIT 20"),
-      this.pool.query("SELECT COALESCE(sum(risk_brl + CASE WHEN COALESCE(metadata->>'slippageBufferPct','') = '' THEN entry_value_brl * 0.0025 ELSE 0 END),0) AS reserved_risk FROM public.paper_trades WHERE status='OPEN'")
+      this.pool.query("SELECT COALESCE(sum(risk_brl + CASE WHEN COALESCE(metadata->>'slippageBufferPct','') = '' THEN entry_value_brl * 0.0025 ELSE 0 END),0) AS reserved_risk FROM public.paper_trades WHERE status='OPEN'"),
+      this.pool.query(`SELECT
+        COUNT(*) FILTER (WHERE status='CLOSED')::int AS closed_trades,
+        COUNT(*) FILTER (WHERE status='CLOSED' AND pnl_net_brl > 0)::int AS winning_trades,
+        COALESCE(SUM(pnl_gross_brl) FILTER (WHERE status='CLOSED'),0) AS gross_brl,
+        COALESCE(SUM(fees_total_brl) FILTER (WHERE status='CLOSED'),0) AS fees_brl,
+        COALESCE(SUM(pnl_net_brl) FILTER (WHERE status='CLOSED'),0) AS net_brl,
+        COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE status='CLOSED' AND pnl_net_brl > 0) / NULLIF(COUNT(*) FILTER (WHERE status='CLOSED'),0),1),0) AS win_rate_pct
+        FROM public.paper_trades`)
     ]);
     const cfg = settings.rows[0] || {};
     const state = daily.rows[0] || {};
@@ -233,6 +250,7 @@ class PaperTrader {
       daily: state,
       openPositions: open.rows,
       recentTrades: recent.rows,
+      performance: performance.rows[0] || {},
       events: events.rows
     };
   }
