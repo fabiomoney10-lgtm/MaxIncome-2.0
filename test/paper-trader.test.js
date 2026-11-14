@@ -81,3 +81,20 @@ test('stop fill uses the worse observed market price when the market gaps down',
 test('stop fill rejects invalid market inputs',()=>{
  assert.throws(()=>calculateStopExecutionPrice({marketPrice:0,stopPrice:100}),/Parâmetros inválidos/);
 });
+
+test('strategy filters an overbought momentum spike instead of chasing it',()=>{
+ const {analyzeCandles}=require('../src/strategy');
+ const candles=Array.from({length:60},(_,i)=>({close:100+i*0.1}));
+ const result=analyzeCandles(candles);
+ assert.equal(result.signal,'WAIT');
+ assert.equal(result.rsi,100);
+});
+
+test('strategy accepts a moderate aligned trend with healthy RSI and limited extension',()=>{
+ const {analyzeCandles}=require('../src/strategy');
+ const candles=Array.from({length:60},(_,i)=>({close:100+i*0.05+Math.sin(i*1.3)*0.3}));
+ const result=analyzeCandles(candles);
+ assert.equal(result.signal,'BULLISH');
+ assert.ok(result.rsi>=52 && result.rsi<=70);
+ assert.ok(result.extensionPct<=1.5);
+});
