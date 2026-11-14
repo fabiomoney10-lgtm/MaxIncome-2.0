@@ -1,11 +1,11 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { runBacktest, normalizeCandles } = require('../src/backtest');
+const { runBacktest, normalizeCandles, lastCompletedHourlyIndex } = require('../src/backtest');
 
 const FIFTEEN = 15 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
-const BASE = Date.now() - 220 * FIFTEEN;
+const BASE = Date.now() - 300 * FIFTEEN;
 
 function makeHistory() {
   const m15 = [];
@@ -64,10 +64,11 @@ test('backtest returns chronological in-sample and out-of-sample metrics', () =>
   assert.equal(result.assumptions.sameCandleStopAndTarget, 'Stop primeiro (conservador)');
 });
 
-test('higher timeframe confirmation cannot use an hourly candle before it closes', () => {
-  const { m15, h1 } = makeHistory();
-  const withIncomplete = runBacktest({ candles15m: m15, candles1h: h1, strategy: 'enhanced' });
-  const truncated = h1.filter(c => c.start + HOUR <= m15[150].start + FIFTEEN);
-  assert.ok(truncated.length <= h1.length);
-  assert.ok(withIncomplete.data.candles1h === h1.length);
+test('higher timeframe confirmation excludes the hourly candle until its close', () => {
+  const hourly = [
+    { start: 0 }, { start: HOUR }, { start: 2 * HOUR }
+  ];
+  assert.equal(lastCompletedHourlyIndex(hourly, HOUR - 1), -1);
+  assert.equal(lastCompletedHourlyIndex(hourly, HOUR), 0);
+  assert.equal(lastCompletedHourlyIndex(hourly, 2 * HOUR), 1);
 });
