@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('node:fs');
 const { runBacktest } = require('../src/backtest');
 
 const BASE_URL = 'https://api.bybit.com';
@@ -75,8 +76,19 @@ async function main() {
       `novo OOS ${e.trades} trades, ${e.netPnl} USDT, WR ${e.winRatePct}%\n`
     );
   }
-  process.stdout.write('\nRELATÓRIO COMPLETO (JSON)\n');
-  process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+  const serialized = JSON.stringify(report, null, 2);
+  const outputPath = process.env.BACKTEST_OUTPUT || 'backtest-report.json';
+  fs.writeFileSync(outputPath, serialized + '\\n', 'utf8');
+  process.stdout.write('\\nRELATÓRIO COMPLETO (JSON) salvo em ' + outputPath + '\\n');
+  for (const [symbol, result] of Object.entries(report.symbols)) {
+    for (const [label, key] of [['BASE', 'baseline'], ['APRIMORADA', 'enhanced']]) {
+      const m = result[key].outOfSample;
+      process.stdout.write(
+        `${symbol} ${label} OOS | trades=${m.trades} | winRate=${m.winRatePct}% | ` +
+        `net=${m.netPnl} USDT | PF=${m.profitFactor} | DD=${m.maxDrawdownPct}%\\n`
+      );
+    }
+  }
 }
 
 main().catch(error => {
