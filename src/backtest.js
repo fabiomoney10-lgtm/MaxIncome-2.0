@@ -1,9 +1,10 @@
 'use strict';
 
-const { analyzeCandles, sma, calculateRsi } = require('./strategy');
+const { analyzeCandles, analyzeTrendPullback, sma, calculateRsi } = require('./strategy');
 
 const INTERVAL_15M_MS = 15 * 60 * 1000;
 const INTERVAL_1H_MS = 60 * 60 * 1000;
+const INTERVAL_4H_MS = 4 * 60 * 60 * 1000;
 
 function normalizeCandles(candles, intervalMs) {
   if (!Array.isArray(candles)) throw new TypeError('Candles precisam ser um array.');
@@ -43,6 +44,12 @@ function lastCompletedHourlyIndex(hourly, decisionTime, currentIndex = -1) {
   let index = currentIndex;
   while (index + 1 < hourly.length &&
     hourly[index + 1].start + INTERVAL_1H_MS <= decisionTime) index += 1;
+  return index;
+}
+
+function lastCompletedIndex(candles, intervalMs, decisionTime, currentIndex = -1) {
+  let index = currentIndex;
+  while (index + 1 < candles.length && candles[index + 1].start + intervalMs <= decisionTime) index += 1;
   return index;
 }
 
@@ -96,6 +103,7 @@ function runBacktest({
 }) {
   const bars = normalizeCandles(candles15m, INTERVAL_15M_MS);
   const hourly = normalizeCandles(candles1h, INTERVAL_1H_MS);
+  const fourHourly = normalizeCandles(candles4h, INTERVAL_4H_MS);
   const numeric = [initialCapital, riskPct, stopLossPct, takeProfitPct, feeRatePerSide,
     entrySlippagePct, stopSlippagePct, fxRate, trainFraction];
   if (numeric.some(v => !Number.isFinite(Number(v))) || initialCapital <= 0 ||
@@ -104,7 +112,7 @@ function runBacktest({
       fxRate <= 0 || trainFraction <= 0.5 || trainFraction >= 0.9) {
     throw new TypeError('Parâmetros de backtest inválidos.');
   }
-  if (bars.length < 150 || hourly.length < 60) {
+  if (bars.length < 150 || hourly.length < 60 || (strategy === 'trend_pullback' && fourHourly.length < 100)) {
     throw new Error('Histórico insuficiente: são necessários pelo menos 150 candles de 15m e 60 de 1h.');
   }
 
@@ -112,6 +120,7 @@ function runBacktest({
   const splitTimestamp = bars[splitIndex].start;
   const trades = [];
   let hourlyIndex = -1;
+  let fourHourlyIndex = -1;
   let openPosition = null;
   let equity = initialCapital;
   let skippedSignals = 0;
@@ -158,25 +167,34 @@ function runBacktest({
 
     const decisionTime = candle.start + INTERVAL_15M_MS;
     hourlyIndex = lastCompletedHourlyIndex(hourly, decisionTime, hourlyIndex);
+    fourHourlyIndex = lastCompletedIndex(fourHourly, INTERVAL_4H_MS, decisionTime, fourHourlyIndex);
 
     // Preserve the full Wilder RSI/ATR warm-up history; this avoids resetting recursive indicators mid-test.
     const history15m = bars.slice(0, i + 1);
     const history1h = hourly.slice(0, hourlyIndex + 1);
+    const history4h = fourHourly.slice(0, fourHourlyIndex + 1);
+    const analysis = strategy === 'trend_pullback'
+      ? analyzeTrendPullback(history15m, history1h, history4h)
+      : null;
     const signal = strategy === 'baseline'
       ? baselineSignal(history15m)
-      : analyzeCandles(history15m, history1h).signal;
+      : strategy === 'trend_pullback'
+        ? analysis.signal
+        : analyzeCandles(history15m, history1h).signal;
     if (signal !== 'BULLISH') continue;
 
     const next = bars[i + 1];
     const entryPrice = next.open * (1 + entrySlippagePct / 100);
-    const stopPrice = entryPrice * (1 - stopLossPct / 100);
+    const tradeStopPct = strategy === 'trend_pullback' ? analysis.stopLossPct : stopLossPct;
+    const tradeTargetPct = strategy === 'trend_pullback' ? analysis.takeProfitPct : takeProfitPct;
+    const stopPrice = entryPrice * (1 - tradeStopPct / 100);
     const effectiveTargetPct = Math.max(
-      takeProfitPct,
-      2 * (stopLossPct + stopSlippagePct + entrySlippagePct + feeRatePerSide * 200) +
+      tradeTargetPct,
+      2 * (tradeStopPct + stopSlippagePct + entrySlippagePct + feeRatePerSide * 200) +
         entrySlippagePct + feeRatePerSide * 200
     );
     const targetPrice = entryPrice * (1 + effectiveTargetPct / 100);
-    const riskFraction = (stopLossPct + stopSlippagePct + entrySlippagePct + feeRatePerSide * 200) / 100;
+    const riskFraction = (tradeStopPct + stopSlippagePct + entrySlippagePct + feeRatePerSide * 200) / 100;
     const riskBudget = equity * riskPct / 100;
     const riskPerUnit = entryPrice * fxRate * riskFraction;
     const quantity = Math.min(riskBudget / riskPerUnit, equity / (entryPrice * fxRate));
@@ -204,6 +222,7 @@ function runBacktest({
     data: {
       candles15m: bars.length,
       candles1h: hourly.length,
+      candles4h: fourHourly.length,
       start: bars.length ? new Date(bars[0].start).toISOString() : null,
       end: bars.length ? new Date(bars[bars.length - 1].start + INTERVAL_15M_MS).toISOString() : null,
       splitAt: new Date(splitTimestamp).toISOString(),
@@ -230,4 +249,4 @@ function runBacktest({
   };
 }
 
-module.exports = { runBacktest, normalizeCandles, baselineSignal, lastCompletedHourlyIndex, metrics };
+module.exports = { runBacktest, normalizeCandles, baselineSignal, lastCompletedHourlyIndex, lastCompletedIndex, metrics };
