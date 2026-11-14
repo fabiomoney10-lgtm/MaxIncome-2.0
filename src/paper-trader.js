@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
-const { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require('./risk-guards');
+const { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, calculateStopExecutionPrice, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require('./risk-guards');
 
 function createPool(connectionString) {
   if (!connectionString) throw new Error('DATABASE_URL não configurada; motor PAPER permanece bloqueado.');
@@ -77,18 +77,22 @@ class PaperTrader {
           if (!reason) continue;
           const tradeFx = Number((trade.metadata && trade.metadata.fxUsdBrl) || fx || 0);
           if (!(tradeFx > 0)) continue;
-          const gross = (price - Number(trade.entry_price)) * Number(trade.quantity) * tradeFx;
+          const slippageBufferPct = Number((trade.metadata && trade.metadata.slippageBufferPct) ?? DEFAULT_STOP_SLIPPAGE_BUFFER_PCT);
+          const fillPrice = reason === 'STOP_LOSS'
+            ? calculateStopExecutionPrice({ marketPrice: price, stopPrice: Number(trade.stop_price), slippageBufferPct })
+            : price;
+          const gross = (fillPrice - Number(trade.entry_price)) * Number(trade.quantity) * tradeFx;
           const entryFee = Number(trade.estimated_entry_fee_brl);
-          const exitFee = price * Number(trade.quantity) * tradeFx * Number(settings.fee_rate_per_side);
+          const exitFee = fillPrice * Number(trade.quantity) * tradeFx * Number(settings.fee_rate_per_side);
           const fees = entryFee + exitFee;
           const net = gross - fees;
           await client.query(
             "UPDATE public.paper_trades SET status='CLOSED', exit_price=$1, exit_reason=$2, pnl_gross_brl=$3, fees_total_brl=$4, pnl_net_brl=$5, closed_at=now() WHERE id=$6",
-            [price, reason, gross, fees, net, trade.id]
+            [fillPrice, reason, gross, fees, net, trade.id]
           );
           await client.query(
             'INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,$2,$3,$4,$5)',
-            [trade.id, reason === 'STOP_LOSS' ? 'STOP_TRIGGERED' : 'TARGET_TRIGGERED', trade.symbol, 'Posição PAPER encerrada por nível de preço.', JSON.stringify({ price, gross, fees, net })]
+            [trade.id, reason === 'STOP_LOSS' ? 'STOP_TRIGGERED' : 'TARGET_TRIGGERED', trade.symbol, 'Posição PAPER encerrada por nível de preço.', JSON.stringify({ observedPrice: price, fillPrice, slippageBufferPct: reason === 'STOP_LOSS' ? slippageBufferPct : 0, gross, fees, net })]
           );
           realizedDelta += net;
         }
