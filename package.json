@@ -7,7 +7,8 @@
   "scripts": {
     "start": "NODE_USE_SYSTEM_CA=1 node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "backtest": "node tools/backtest.js"
   },
   "engines": {
     "node": ">=18"

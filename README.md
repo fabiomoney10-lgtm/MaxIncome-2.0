@@ -42,3 +42,13 @@ Não coloque segredos no GitHub, no `render.yaml`, no HTML ou no chat. O Render 
 5. Só então discutir execução real, com autorização explícita e limites conservadores.
 
 **Não há promessa de lucro. Trading pode gerar perdas.**
+
+## Backtest histórico (somente dados públicos)
+
+Execute `npm run backtest` para comparar três modelos: estratégia-base, filtro multi-timeframe 15m/1h e candidata de tendência 4h + ADX/DI + pullback confirmado em 15m. A candidata usa stop baseado em ATR e alvo inicial de 2,2R. O relatório apresenta métricas totais, in-sample e out-of-sample, com taxas, slippage e execução conservadora de stop. Os candles de 1h e 4h só entram no sinal depois do fechamento de cada período, evitando lookahead.
+
+Opções:
+- `BACKTEST_DAYS=180` (entre 30 e 365 dias).
+- `BACKTEST_SYMBOLS=XRPUSDT,BTCUSDT,ETHUSDT,SOLUSDT`.
+
+O resultado financeiro é apresentado em USDT, sem conversão histórica presumida para BRL. O comando não usa credenciais, banco de dados ou endpoints de ordens. Os resultados históricos não garantem desempenho futuro.
