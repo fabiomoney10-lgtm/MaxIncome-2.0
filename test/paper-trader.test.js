@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const {createPool}=require('../src/paper-trader');
 const {RiskManager}=require('../src/risk-manager');
 const {analyzeCandles}=require('../src/strategy');
-const {getTradingDate,calculateAvailableDailyRisk,calculateRiskPerUnitBRL}=require('../src/risk-guards');
+const {getTradingDate,calculateAvailableDailyRisk,calculateRiskPerUnitBRL,calculateStopExecutionPrice}=require('../src/risk-guards');
 
 test('fails closed when DATABASE_URL is absent',()=>assert.throws(()=>createPool(''),/DATABASE_URL não configurada/));
 test('risk limits expose PAPER-only controls and never enable exchange execution',()=>{
@@ -66,4 +66,18 @@ test('unit risk includes stop loss, round-trip fees and a slippage buffer',()=>{
 
 test('unit risk rejects invalid prices and rates',()=>{
  assert.throws(()=>calculateRiskPerUnitBRL({entryPrice:0,fxRate:5,stopLossPct:1,feeRatePerSide:0.001}),/Parâmetros inválidos/);
+});
+
+test('stop fill applies adverse slippage when market remains near the stop',()=>{
+ const fill=calculateStopExecutionPrice({marketPrice:99.9,stopPrice:100,slippageBufferPct:0.25});
+ assert.equal(fill,99.75);
+});
+
+test('stop fill uses the worse observed market price when the market gaps down',()=>{
+ const fill=calculateStopExecutionPrice({marketPrice:98,stopPrice:100,slippageBufferPct:0.25});
+ assert.equal(fill,98);
+});
+
+test('stop fill rejects invalid market inputs',()=>{
+ assert.throws(()=>calculateStopExecutionPrice({marketPrice:0,stopPrice:100}),/Parâmetros inválidos/);
 });
