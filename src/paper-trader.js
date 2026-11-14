@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
-const { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, calculateStopExecutionPrice, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require('./risk-guards');
+const { getTradingDate, calculateAvailableDailyRisk, calculatePositionSizeBRL, calculateStopExecutionPrice, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require('./risk-guards');
 
 function createPool(connectionString) {
   if (!connectionString) throw new Error('DATABASE_URL não configurada; motor PAPER permanece bloqueado.');
@@ -145,22 +145,27 @@ class PaperTrader {
             const alreadyOpen = await client.query("SELECT 1 FROM public.paper_trades WHERE symbol=$1 AND status='OPEN' LIMIT 1", [symbol]);
             if (alreadyOpen.rowCount) continue;
             const entry = Number(ticker.lastPrice);
-            const stop = entry * (1 - Number(settings.stop_loss_pct) / 100);
-            const stopPct = Number(settings.stop_loss_pct) / 100;
+            const stopPct = Number(settings.stop_loss_pct);
             const feePct = Number(settings.fee_rate_per_side) * 2;
-            const riskPerUnitBrl = calculateRiskPerUnitBRL({ entryPrice: entry, fxRate: fx, stopLossPct: Number(settings.stop_loss_pct), feeRatePerSide: Number(settings.fee_rate_per_side) });
-            if (!(riskPerUnitBrl > 0)) continue;
             const requestedRisk = Math.min(Number(settings.max_risk_per_trade_brl), Number(settings.initial_capital_brl) * 0.01, availableDailyRisk);
-            const riskLimitedQty = requestedRisk / riskPerUnitBrl;
             const remainingExposure = Math.max(0, Number(settings.max_exposure_brl) - openExposure);
             const equity = Number(settings.initial_capital_brl) + Number(state.realized_pnl_brl) + unrealized;
             const remainingCapital = Math.max(0, equity - openExposure);
             const maxNotional = Math.min(remainingExposure, remainingCapital);
-            const qty = Math.min(riskLimitedQty, maxNotional / (entry * fx));
-            const notional = qty * entry * fx;
-            const actualRisk = qty * riskPerUnitBrl;
+            const sizing = calculatePositionSizeBRL({
+              entryPrice: entry,
+              fxRate: fx,
+              stopLossPct: stopPct,
+              feeRatePerSide: Number(settings.fee_rate_per_side),
+              riskBudgetBRL: requestedRisk,
+              maxNotionalBRL: maxNotional
+            });
+            const qty = sizing.quantity;
+            const notional = sizing.notionalBRL;
+            const actualRisk = sizing.modeledRiskBRL;
+            const stop = entry * (1 - stopPct / 100);
             if (!(qty > 0) || actualRisk > requestedRisk + 0.01 || notional < 10) continue;
-            const minimumNetTwoToOneMove = 2 * (stopPct + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT / 100 + feePct) + feePct;
+            const minimumNetTwoToOneMove = 2 * (stopPct / 100 + DEFAULT_STOP_SLIPPAGE_BUFFER_PCT / 100 + feePct) + feePct;
             const configuredTargetMove = Number(settings.take_profit_pct) / 100;
             const takeProfit = entry * (1 + Math.max(configuredTargetMove, minimumNetTwoToOneMove));
             const entryFee = notional * Number(settings.fee_rate_per_side);
