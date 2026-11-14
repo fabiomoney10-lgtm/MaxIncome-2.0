@@ -172,7 +172,7 @@ class SwingPaperTrader {
             [day]
           );
           await client.query(
-            "INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,'SWING_TRADE_OPENED',$2,'Posição Swing PAPER aberta; nenhuma ordem enviada à corretora.',$3)",
+            "INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,'TRADE_OPENED',$2,'Posição Swing PAPER aberta; nenhuma ordem enviada à corretora.',$3)",
             [inserted.rows[0].id, symbol, JSON.stringify({
               entry: sizing.entryPrice,
               stop: sizing.stopPrice,
