@@ -90,6 +90,7 @@ function metrics(trades, initialCapital) {
 function runBacktest({
   candles15m,
   candles1h,
+  candles4h = [],
   strategy = 'enhanced',
   initialCapital = 5000,
   riskPct = 1,
@@ -113,7 +114,7 @@ function runBacktest({
     throw new TypeError('Parâmetros de backtest inválidos.');
   }
   if (bars.length < 150 || hourly.length < 60 || (strategy === 'trend_pullback' && fourHourly.length < 100)) {
-    throw new Error('Histórico insuficiente: são necessários pelo menos 150 candles de 15m e 60 de 1h.');
+    throw new Error('Histórico insuficiente: são necessários 150 candles de 15m, 60 de 1h e, para o candidato, 100 de 4h.');
   }
 
   const splitIndex = Math.floor(bars.length * trainFraction);
