@@ -3,7 +3,8 @@
 const fs = require('node:fs');
 const { runBacktest } = require('../src/backtest');
 
-const BASE_URL = 'https://api.bybit.com';
+const BYBIT_BASE_URL = 'https://api.bybit.com';
+const BINANCE_BASE_URL = 'https://data-api.binance.vision';
 const SYMBOLS = (process.env.BACKTEST_SYMBOLS || 'XRPUSDT,BTCUSDT,ETHUSDT,SOLUSDT')
   .split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
 const DAYS = Math.max(30, Math.min(365, Number(process.env.BACKTEST_DAYS || 180)));
@@ -13,7 +14,7 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function fetchKlines(symbol, interval, intervalMs, days) {
+async function fetchBybitKlines(symbol, interval, intervalMs, days) {
   const now = Date.now();
   const earliest = now - days * 86400000;
   let end = now;
@@ -23,7 +24,7 @@ async function fetchKlines(symbol, interval, intervalMs, days) {
     const query = new URLSearchParams({
       category: 'spot', symbol, interval, limit: '1000', end: String(end)
     });
-    const response = await fetch(BASE_URL + '/v5/market/kline?' + query.toString(), {
+    const response = await fetch(BYBIT_BASE_URL + '/v5/market/kline?' + query.toString(), {
       headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(20000)
     });
@@ -50,22 +51,73 @@ async function fetchKlines(symbol, interval, intervalMs, days) {
   return [...candles.values()].sort((a, b) => a.start - b.start);
 }
 
+async function fetchBinanceKlines(symbol, interval, intervalMs, days) {
+  const now = Date.now();
+  const earliest = now - days * 86400000;
+  const binanceInterval = interval === '15' ? '15m' : '1h';
+  let endTime = now;
+  const candles = new Map();
+  let pages = 0;
+  while (endTime > earliest && pages < 500) {
+    const query = new URLSearchParams({
+      symbol, interval: binanceInterval, limit: '1000', endTime: String(endTime)
+    });
+    const response = await fetch(BINANCE_BASE_URL + '/api/v3/klines?' + query.toString(), {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(20000)
+    });
+    if (!response.ok) throw new Error(`Binance HTTP ${response.status} em ${symbol}/${binanceInterval}`);
+    const rows = await response.json();
+    if (!Array.isArray(rows)) throw new Error(`Resposta inválida da Binance em ${symbol}/${binanceInterval}`);
+    if (!rows.length) break;
+    let oldest = Infinity;
+    for (const row of rows) {
+      const start = Number(row[0]);
+      if (!Number.isFinite(start) || start < earliest || start + intervalMs > now) continue;
+      oldest = Math.min(oldest, start);
+      candles.set(start, {
+        start, open: Number(row[1]), high: Number(row[2]), low: Number(row[3]),
+        close: Number(row[4]), volume: Number(row[5])
+      });
+    }
+    pages += 1;
+    if (!Number.isFinite(oldest) || oldest <= earliest || rows.length < 1000) break;
+    endTime = oldest - 1;
+    await sleep(130);
+  }
+  return [...candles.values()].sort((a, b) => a.start - b.start);
+}
+
+async function fetchMarketHistory(symbol, days) {
+  const intervals = [{ name: '15', ms: 15 * 60 * 1000 }, { name: '60', ms: 60 * 60 * 1000 }];
+  try {
+    const [m15, h1] = await Promise.all(intervals.map(x => fetchBybitKlines(symbol, x.name, x.ms, days)));
+    if (m15.length < 150 || h1.length < 60) throw new Error('Histórico Bybit insuficiente para o backtest.');
+    return { m15, h1, source: 'BYBIT_SPOT_MAINNET' };
+  } catch (bybitError) {
+    process.stdout.write(`Bybit indisponível para ${symbol} (${bybitError.message}); tentando Binance public market data.\\n`);
+    const [m15, h1] = await Promise.all(intervals.map(x => fetchBinanceKlines(symbol, x.name, x.ms, days)));
+    if (m15.length < 150 || h1.length < 60) {
+      throw new Error(`Histórico insuficiente em Bybit e Binance para ${symbol}. Bybit: ${bybitError.message}`);
+    }
+    return { m15, h1, source: 'BINANCE_SPOT_PUBLIC_PROXY' };
+  }
+}
+
 async function main() {
   const report = {
     generatedAt: new Date().toISOString(),
-    source: 'Bybit public spot market data; no authenticated endpoints',
+    sourcePolicy: 'Prefer Bybit spot mainnet. If Bybit blocks or lacks history, use Binance spot public data as a clearly labeled cross-exchange proxy. No authenticated endpoints.',
     daysRequested: DAYS,
     quoteCurrency: 'USDT (P&L remains in USDT; no invented historical USD/BRL conversion)',
     symbols: {}
   };
   for (const symbol of SYMBOLS) {
     process.stdout.write(`Baixando histórico ${symbol}...\n`);
-    const [m15, h1] = await Promise.all([
-      fetchKlines(symbol, '15', INTERVALS[0].ms, DAYS),
-      fetchKlines(symbol, '60', INTERVALS[1].ms, DAYS)
-    ]);
-    const options = { candles15m: m15, candles1h: h1 };
+    const history = await fetchMarketHistory(symbol, DAYS);
+    const options = { candles15m: history.m15, candles1h: history.h1 };
     report.symbols[symbol] = {
+      source: history.source,
       baseline: runBacktest({ ...options, strategy: 'baseline' }),
       enhanced: runBacktest({ ...options, strategy: 'enhanced' })
     };
