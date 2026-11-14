@@ -97,7 +97,7 @@ async function fetchMarketHistory(symbol, days) {
     if (m15.length < 150 || h1.length < 60) throw new Error('Histórico Bybit insuficiente para o backtest.');
     return { m15, h1, source: 'BYBIT_SPOT_MAINNET' };
   } catch (bybitError) {
-    process.stdout.write(`Bybit indisponível para ${symbol} (${bybitError.message}); tentando Binance public market data.\\n`);
+    process.stdout.write(`Bybit indisponível para ${symbol} (${bybitError.message}); tentando Binance public market data.\n`);
     const [m15, h1] = await Promise.all(intervals.map(x => fetchBinanceKlines(symbol, x.name, x.ms, days)));
     if (m15.length < 150 || h1.length < 60) {
       throw new Error(`Histórico insuficiente em Bybit e Binance para ${symbol}. Bybit: ${bybitError.message}`);
@@ -132,14 +132,14 @@ async function main() {
   }
   const serialized = JSON.stringify(report, null, 2);
   const outputPath = process.env.BACKTEST_OUTPUT || 'backtest-report.json';
-  fs.writeFileSync(outputPath, serialized + '\\n', 'utf8');
-  process.stdout.write('\\nRELATÓRIO COMPLETO (JSON) salvo em ' + outputPath + '\\n');
+  fs.writeFileSync(outputPath, serialized + '\n', 'utf8');
+  process.stdout.write('\nRELATÓRIO COMPLETO (JSON) salvo em ' + outputPath + '\n');
   for (const [symbol, result] of Object.entries(report.symbols)) {
     for (const [label, key] of [['BASE', 'baseline'], ['APRIMORADA', 'enhanced']]) {
       const m = result[key].outOfSample;
       process.stdout.write(
         `${symbol} ${label} OOS | trades=${m.trades} | winRate=${m.winRatePct}% | ` +
-        `net=${m.netPnl} USDT | PF=${m.profitFactor} | DD=${m.maxDrawdownPct}%\\n`
+        `net=${m.netPnl} USDT | PF=${m.profitFactor} | DD=${m.maxDrawdownPct}%\n`
       );
     }
   }
