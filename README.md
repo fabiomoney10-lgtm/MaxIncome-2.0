@@ -42,3 +42,13 @@ Não coloque segredos no GitHub, no `render.yaml`, no HTML ou no chat. O Render 
 5. Só então discutir execução real, com autorização explícita e limites conservadores.
 
 **Não há promessa de lucro. Trading pode gerar perdas.**
+
+## Backtest histórico (somente dados públicos)
+
+Execute `npm run backtest` para comparar a estratégia-base e a estratégia multi-timeframe usando candles públicos spot da Bybit. O relatório apresenta métricas totais, in-sample e out-of-sample, com taxas, slippage e execução conservadora de stop.
+
+Opções:
+- `BACKTEST_DAYS=180` (entre 30 e 365 dias).
+- `BACKTEST_SYMBOLS=XRPUSDT,BTCUSDT,ETHUSDT,SOLUSDT`.
+
+O resultado financeiro é apresentado em USDT, sem conversão histórica presumida para BRL. O comando não usa credenciais, banco de dados ou endpoints de ordens. Os resultados históricos não garantem desempenho futuro.
