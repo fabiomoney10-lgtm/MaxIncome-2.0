@@ -55,12 +55,12 @@ async function fetchBinanceKlines(symbol, interval, intervalMs, days) {
   const now = Date.now();
   const earliest = now - days * 86400000;
   const binanceInterval = interval === '15' ? '15m' : '1h';
-  let endTime = now;
+  let startTime = earliest;
   const candles = new Map();
   let pages = 0;
-  while (endTime > earliest && pages < 500) {
+  while (startTime < now && pages < 500) {
     const query = new URLSearchParams({
-      symbol, interval: binanceInterval, limit: '1000', endTime: String(endTime)
+      symbol, interval: binanceInterval, limit: '1000', startTime: String(Math.floor(startTime))
     });
     const response = await fetch(BINANCE_BASE_URL + '/api/v3/klines?' + query.toString(), {
       headers: { Accept: 'application/json' },
@@ -70,19 +70,21 @@ async function fetchBinanceKlines(symbol, interval, intervalMs, days) {
     const rows = await response.json();
     if (!Array.isArray(rows)) throw new Error(`Resposta inválida da Binance em ${symbol}/${binanceInterval}`);
     if (!rows.length) break;
-    let oldest = Infinity;
+    let newest = -Infinity;
     for (const row of rows) {
       const start = Number(row[0]);
       if (!Number.isFinite(start) || start < earliest || start + intervalMs > now) continue;
-      oldest = Math.min(oldest, start);
+      newest = Math.max(newest, start);
       candles.set(start, {
         start, open: Number(row[1]), high: Number(row[2]), low: Number(row[3]),
         close: Number(row[4]), volume: Number(row[5])
       });
     }
     pages += 1;
-    if (!Number.isFinite(oldest) || oldest <= earliest || rows.length < 1000) break;
-    endTime = oldest - 1;
+    if (!Number.isFinite(newest) || newest < startTime || rows.length < 1000) break;
+    const nextStart = newest + intervalMs;
+    if (nextStart <= startTime) throw new Error(`Paginação Binance sem avanço em ${symbol}/${binanceInterval}`);
+    startTime = nextStart;
     await sleep(130);
   }
   return [...candles.values()].sort((a, b) => a.start - b.start);
