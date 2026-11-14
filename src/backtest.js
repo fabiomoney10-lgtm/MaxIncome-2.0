@@ -159,9 +159,9 @@ function runBacktest({
     const decisionTime = candle.start + INTERVAL_15M_MS;
     hourlyIndex = lastCompletedHourlyIndex(hourly, decisionTime, hourlyIndex);
 
-    // Indicators need at most 100 completed candles; keep rolling windows to avoid O(n²) backtests.
-    const history15m = bars.slice(Math.max(0, i - 99), i + 1);
-    const history1h = hourly.slice(Math.max(0, hourlyIndex - 99), hourlyIndex + 1);
+    // Preserve the full Wilder RSI/ATR warm-up history; this avoids resetting recursive indicators mid-test.
+    const history15m = bars.slice(0, i + 1);
+    const history1h = hourly.slice(0, hourlyIndex + 1);
     const signal = strategy === 'baseline'
       ? baselineSignal(history15m)
       : analyzeCandles(history15m, history1h).signal;
