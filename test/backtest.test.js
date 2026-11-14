@@ -76,10 +76,10 @@ test('higher timeframe confirmation excludes the hourly candle until its close',
 
 test('4h confirmation never uses a candle before its close', () => {
   const fourHourly = [{ start: 0 }, { start: 4 * HOUR }, { start: 8 * HOUR }];
-  assert.equal(lastCompletedIndex(fourHourly, 4 * HOUR, -1), 0);
-  assert.equal(lastCompletedIndex(fourHourly, 4 * HOUR - 1, -1), -1);
-  assert.equal(lastCompletedIndex(fourHourly, 8 * HOUR - 1, 0), 0);
-  assert.equal(lastCompletedIndex(fourHourly, 8 * HOUR, 0), 1);
+  assert.equal(lastCompletedIndex(fourHourly, 4 * HOUR, 4 * HOUR, -1), 0);
+  assert.equal(lastCompletedIndex(fourHourly, 4 * HOUR, 4 * HOUR - 1, -1), -1);
+  assert.equal(lastCompletedIndex(fourHourly, 4 * HOUR, 8 * HOUR - 1, 0), 0);
+  assert.equal(lastCompletedIndex(fourHourly, 4 * HOUR, 8 * HOUR, 0), 1);
 });
 
 test('trend-pullback strategy fails closed when 4h history is insufficient', () => {
