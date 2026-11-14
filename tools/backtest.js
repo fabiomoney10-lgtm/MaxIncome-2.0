@@ -129,7 +129,7 @@ async function main() {
     const t = report.symbols[symbol].trendPullback.outOfSample;
     process.stdout.write(
       `${symbol}: base OOS ${b.trades} trades, ${b.netPnl} USDT, WR ${b.winRatePct}% | ` +
-      `novo OOS ${e.trades} trades, ${e.netPnl} USDT, WR ${e.winRatePct}%\n`
+      `enhanced ${e.netPnl} USDT / WR ${e.winRatePct}% | pullback ${t.trades} trades, ${t.netPnl} USDT / WR ${t.winRatePct}%\n`
     );
   }
   const serialized = JSON.stringify(report, null, 2);
