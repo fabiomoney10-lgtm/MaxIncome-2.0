@@ -8,7 +8,7 @@ const BINANCE_BASE_URL = 'https://data-api.binance.vision';
 const SYMBOLS = (process.env.BACKTEST_SYMBOLS || 'XRPUSDT,BTCUSDT,ETHUSDT,SOLUSDT')
   .split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
 const DAYS = Math.max(30, Math.min(365, Number(process.env.BACKTEST_DAYS || 180)));
-const INTERVALS = [{ name: '15', ms: 15 * 60 * 1000 }, { name: '60', ms: 60 * 60 * 1000 }];
+const INTERVALS = [{ name: '15', ms: 15 * 60 * 1000 }, { name: '60', ms: 60 * 60 * 1000 }, { name: '240', ms: 4 * 60 * 60 * 1000 }];
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -54,7 +54,7 @@ async function fetchBybitKlines(symbol, interval, intervalMs, days) {
 async function fetchBinanceKlines(symbol, interval, intervalMs, days) {
   const now = Date.now();
   const earliest = now - days * 86400000;
-  const binanceInterval = interval === '15' ? '15m' : '1h';
+  const binanceInterval = interval === '15' ? '15m' : interval === '60' ? '1h' : '4h';
   let startTime = earliest;
   const candles = new Map();
   let pages = 0;
@@ -91,18 +91,18 @@ async function fetchBinanceKlines(symbol, interval, intervalMs, days) {
 }
 
 async function fetchMarketHistory(symbol, days) {
-  const intervals = [{ name: '15', ms: 15 * 60 * 1000 }, { name: '60', ms: 60 * 60 * 1000 }];
+  const intervals = INTERVALS;
   try {
-    const [m15, h1] = await Promise.all(intervals.map(x => fetchBybitKlines(symbol, x.name, x.ms, days)));
-    if (m15.length < 150 || h1.length < 60) throw new Error('Histórico Bybit insuficiente para o backtest.');
-    return { m15, h1, source: 'BYBIT_SPOT_MAINNET' };
+    const [m15, h1, h4] = await Promise.all(intervals.map(x => fetchBybitKlines(symbol, x.name, x.ms, days)));
+    if (m15.length < 150 || h1.length < 60 || h4.length < 100) throw new Error('Histórico Bybit insuficiente para o backtest.');
+    return { m15, h1, h4, source: 'BYBIT_SPOT_MAINNET' };
   } catch (bybitError) {
     process.stdout.write(`Bybit indisponível para ${symbol} (${bybitError.message}); tentando Binance public market data.\n`);
-    const [m15, h1] = await Promise.all(intervals.map(x => fetchBinanceKlines(symbol, x.name, x.ms, days)));
-    if (m15.length < 150 || h1.length < 60) {
+    const [m15, h1, h4] = await Promise.all(intervals.map(x => fetchBinanceKlines(symbol, x.name, x.ms, days)));
+    if (m15.length < 150 || h1.length < 60 || h4.length < 100) {
       throw new Error(`Histórico insuficiente em Bybit e Binance para ${symbol}. Bybit: ${bybitError.message}`);
     }
-    return { m15, h1, source: 'BINANCE_SPOT_PUBLIC_PROXY' };
+    return { m15, h1, h4, source: 'BINANCE_SPOT_PUBLIC_PROXY' };
   }
 }
 
@@ -117,14 +117,16 @@ async function main() {
   for (const symbol of SYMBOLS) {
     process.stdout.write(`Baixando histórico ${symbol}...\n`);
     const history = await fetchMarketHistory(symbol, DAYS);
-    const options = { candles15m: history.m15, candles1h: history.h1 };
+    const options = { candles15m: history.m15, candles1h: history.h1, candles4h: history.h4 };
     report.symbols[symbol] = {
       source: history.source,
       baseline: runBacktest({ ...options, strategy: 'baseline' }),
-      enhanced: runBacktest({ ...options, strategy: 'enhanced' })
+      enhanced: runBacktest({ ...options, strategy: 'enhanced' }),
+      trendPullback: runBacktest({ ...options, strategy: 'trend_pullback' })
     };
     const b = report.symbols[symbol].baseline.outOfSample;
     const e = report.symbols[symbol].enhanced.outOfSample;
+    const t = report.symbols[symbol].trendPullback.outOfSample;
     process.stdout.write(
       `${symbol}: base OOS ${b.trades} trades, ${b.netPnl} USDT, WR ${b.winRatePct}% | ` +
       `novo OOS ${e.trades} trades, ${e.netPnl} USDT, WR ${e.winRatePct}%\n`
@@ -135,7 +137,7 @@ async function main() {
   fs.writeFileSync(outputPath, serialized + '\n', 'utf8');
   process.stdout.write('\nRELATÓRIO COMPLETO (JSON) salvo em ' + outputPath + '\n');
   for (const [symbol, result] of Object.entries(report.symbols)) {
-    for (const [label, key] of [['BASE', 'baseline'], ['APRIMORADA', 'enhanced']]) {
+    for (const [label, key] of [['BASE', 'baseline'], ['APRIMORADA', 'enhanced'], ['TENDÊNCIA+ADX+PULLBACK', 'trendPullback']]) {
       const m = result[key].outOfSample;
       process.stdout.write(
         `${symbol} ${label} OOS | trades=${m.trades} | winRate=${m.winRatePct}% | ` +
