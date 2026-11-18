@@ -66,11 +66,13 @@ function sizeSwingPosition({
 }
 
 class SwingPaperTrader {
-  constructor({ pool, fxProvider, scoreMin = SWING_SCORE_MIN, maxOpenPositions = SWING_MAX_OPEN_POSITIONS }) {
+  constructor({ pool, fxProvider, scoreMin = SWING_SCORE_MIN, maxOpenPositions = SWING_MAX_OPEN_POSITIONS, enableNewPositions = false }) {
     this.pool = pool;
     this.fxProvider = fxProvider;
     this.scoreMin = Number(scoreMin);
     this.maxOpenPositions = Number(maxOpenPositions);
+    // Opening Swing PAPER positions stays disabled until a complete close/reconciliation lifecycle exists.
+    this.enableNewPositions = enableNewPositions === true;
     this.lastRunAt = null;
     this.lastError = null;
     this.lastFx = null;
@@ -120,7 +122,7 @@ class SwingPaperTrader {
       });
       const openSwing = openResult.rows.filter(row => row.metadata && row.metadata.engine === 'SWING');
       const openSymbols = new Set(openResult.rows.map(row => row.symbol));
-      const canOpen = settings.trading_enabled === true && Boolean(fx) &&
+      const canOpen = this.enableNewPositions && settings.trading_enabled === true && Boolean(fx) &&
         !daily.halted && availableDailyRiskBRL > 0 &&
         Number(daily.trades_opened) < Number(settings.max_trades_per_day) &&
         openSwing.length < this.maxOpenPositions;
@@ -225,7 +227,7 @@ class SwingPaperTrader {
       mode: 'PAPER',
       engine: 'SWING',
       enabled: cfg.trading_enabled === true,
-      paperPositionsEnabled: true,
+      paperPositionsEnabled: this.enableNewPositions,
       orderExecutionEnabled: false,
       tradingDate: day,
       tradingDateTimezone: 'America/Sao_Paulo',
