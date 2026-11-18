@@ -1,44 +1,53 @@
-# MaxIncome 2.0 — Etapa 1
+# MaxIncome 2.0 — monitoramento e simulador PAPER
 
-Esta entrega é uma base de **monitoramento e análise em Bybit Testnet**.
+O sistema monitora dados públicos da Bybit Mainnet e mantém a execução em **PAPER**. O modo atual não envia ordens à corretora.
 
-## Limites intencionais desta etapa
-- Usa exclusivamente `https://api-testnet.bybit.com`.
-- Não contém chamada de criação de ordem (`/v5/order/create`).
-- Não faz compra nem venda, nem mesmo em modo real.
-- A estratégia SMA 9/21 gera sinais informativos, não previsões nem garantias.
-- Reserva visualmente 6 XRP como patrimônio legado. Não vende nem altera esse saldo.
+## Segurança e limites atuais
+- Não existe implementação de envio de ordens (`/v5/order/create`) neste projeto.
+- `paper_settings.trading_enabled` controla exclusivamente a abertura de posições simuladas no PostgreSQL.
+- A coluna não autoriza execução na Bybit. A execução real permanece indisponível e bloqueada.
+- A estratégia SMA 9/21 é um filtro simples de tendência, não uma previsão nem garantia de lucro.
+- A estratégia Swing é análise; não habilitar abertura automática de posições Swing sem ciclo completo de encerramento e reconciliação.
+- O limite de XRP legado é apenas informativo; nenhuma venda automática é realizada.
+- Perdas podem ocorrer mesmo em simulação por diferenças entre preço observado, slippage e execução real.
 
 ## Requisitos
 - Node.js 18 ou superior.
-- Chaves API criadas na Bybit Testnet, com permissão de leitura.
-- Não habilite saque ou transferência na API.
+- PostgreSQL/Supabase configurado em `DATABASE_URL`.
+- Não habilite saque ou transferência em nenhuma chave API. O simulador atual não precisa de chave privada da Bybit.
 
 ## Executar localmente
-1. Extraia o ZIP.
-2. Copie `.env.example` para `.env`.
-3. Preencha `BYBIT_API_KEY` e `BYBIT_SECRET_KEY` localmente. Não envie o `.env` ao GitHub.
-4. Execute `npm install`.
-5. Execute `npm start`.
-6. Abra `http://localhost:10000`.
+1. Copie `.env.example` para `.env`.
+2. Configure `DATABASE_URL` localmente; nunca envie segredos ao GitHub.
+3. Execute `npm install`.
+4. Execute `npm test`.
+5. Execute `npm start` e abra `http://localhost:10000`.
 
 ## Render
-Crie um Web Service apontando para este repositório:
 - Build Command: `npm install`
 - Start Command: `npm start`
+- Configure `DATABASE_URL` em Environment.
+- Mantenha `BYBIT_ENV=testnet` enquanto o endpoint privado não fizer parte do escopo.
+- Não cadastre credenciais de produção para este modo.
 
-Cadastre `BYBIT_API_KEY` e `BYBIT_SECRET_KEY` em Environment no painel do Render. Cadastre também:
-- `BYBIT_TESTNET=true`
-- `TRADING_MODE=paper`
-- `LEGACY_XRP_RESERVED=6`
+## Habilitar somente a simulação
+Depois de aplicar a migration `supabase/migrations/202611180001_allow_paper_simulation_switch.sql`, a simulação pode ser habilitada no banco:
 
-Não coloque segredos no GitHub, no `render.yaml`, no HTML ou no chat. O Render documenta a configuração de variáveis secretas no painel.
+```sql
+UPDATE public.paper_settings
+SET trading_enabled = true, updated_at = now()
+WHERE id = 1;
+```
 
-## Próximas etapas antes de qualquer negociação
-1. Validar conexão e consistência dos saldos.
-2. Persistir estado e histórico em PostgreSQL.
-3. Construir paper trading com fills, taxas, saldo virtual e relatório.
-4. Testar regras de risco, limites e bloqueio de ativos legados.
-5. Só então discutir execução real, com autorização explícita e limites conservadores.
+Isso permite apenas criar registros de posições PAPER. Para pausar:
 
-**Não há promessa de lucro. Trading pode gerar perdas.**
+```sql
+UPDATE public.paper_settings
+SET trading_enabled = false, updated_at = now()
+WHERE id = 1;
+```
+
+## Antes de qualquer operação com dinheiro real
+Ainda seria necessário desenvolver e auditar um módulo separado de execução real, incluindo regras de precisão e lote da corretora, ordens idempotentes, confirmação de fills parciais, stop/target hospedados na corretora, reconciliação após falhas, testes na Testnet e aprovação explícita. Nenhum desses recursos deve ser presumido como pronto.
+
+**Não há promessa de lucro. Não use este projeto como robô de dinheiro real enquanto a execução real não existir e passar por validação independente.**
