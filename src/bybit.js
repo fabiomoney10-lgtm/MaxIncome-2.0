@@ -100,10 +100,16 @@ class BybitClient {
             'GET', '/v5/market/kline',
             { category: 'spot', symbol, interval, limit }
         );
+        const durationMs = interval === 'D' ? 86400000 : Number(interval) * 60000;
+        const now = Date.now();
         return (result.list || []).map(row => ({
             start: Number(row[0]),
-            close: Number(row[4])
-        })).reverse();
+            open: Number(row[1]),
+            high: Number(row[2]),
+            low: Number(row[3]),
+            close: Number(row[4]),
+            volume: Number(row[5])
+        })).filter(candle => Number.isFinite(candle.start) && candle.start + durationMs <= now).reverse();
     }
 
     async getWalletBalance() {

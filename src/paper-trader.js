@@ -5,6 +5,10 @@ const path = require('path');
 const { Pool } = require('pg');
 const { getTradingDate, calculateAvailableDailyRisk, calculateRiskPerUnitBRL, DEFAULT_STOP_SLIPPAGE_BUFFER_PCT } = require('./risk-guards');
 
+const PAPER_STOP_SLIPPAGE_PCT = 0.05;
+const PAPER_TARGET_SLIPPAGE_PCT = 0.02;
+const MIN_ENTRY_SCORE = 85;
+
 function createPool(connectionString) {
   if (!connectionString) throw new Error('DATABASE_URL não configurada; motor PAPER permanece bloqueado.');
   const parsedUrl = new URL(connectionString);
@@ -77,18 +81,22 @@ class PaperTrader {
           if (!reason) continue;
           const tradeFx = Number((trade.metadata && trade.metadata.fxUsdBrl) || fx || 0);
           if (!(tradeFx > 0)) continue;
-          const gross = (price - Number(trade.entry_price)) * Number(trade.quantity) * tradeFx;
+          const triggerPrice = reason === 'STOP_LOSS'
+            ? Math.min(price, Number(trade.stop_price))
+            : Number(trade.take_profit_price);
+          const fillPrice = triggerPrice * (1 - (reason === 'STOP_LOSS' ? PAPER_STOP_SLIPPAGE_PCT : PAPER_TARGET_SLIPPAGE_PCT) / 100);
+          const gross = (fillPrice - Number(trade.entry_price)) * Number(trade.quantity) * tradeFx;
           const entryFee = Number(trade.estimated_entry_fee_brl);
-          const exitFee = price * Number(trade.quantity) * tradeFx * Number(settings.fee_rate_per_side);
+          const exitFee = fillPrice * Number(trade.quantity) * tradeFx * Number(settings.fee_rate_per_side);
           const fees = entryFee + exitFee;
           const net = gross - fees;
           await client.query(
             "UPDATE public.paper_trades SET status='CLOSED', exit_price=$1, exit_reason=$2, pnl_gross_brl=$3, fees_total_brl=$4, pnl_net_brl=$5, closed_at=now() WHERE id=$6",
-            [price, reason, gross, fees, net, trade.id]
+            [fillPrice, reason, gross, fees, net, trade.id]
           );
           await client.query(
             'INSERT INTO public.paper_events (trade_id,event_type,symbol,message,details) VALUES ($1,$2,$3,$4,$5)',
-            [trade.id, reason === 'STOP_LOSS' ? 'STOP_TRIGGERED' : 'TARGET_TRIGGERED', trade.symbol, 'Posição PAPER encerrada por nível de preço.', JSON.stringify({ price, gross, fees, net })]
+            [trade.id, reason === 'STOP_LOSS' ? 'STOP_TRIGGERED' : 'TARGET_TRIGGERED', trade.symbol, 'Posição PAPER encerrada por nível de preço.', JSON.stringify({ triggerPrice, fillPrice, slippagePct: reason === 'STOP_LOSS' ? PAPER_STOP_SLIPPAGE_PCT : PAPER_TARGET_SLIPPAGE_PCT, gross, fees, net })]
           );
           realizedDelta += net;
         }
@@ -137,7 +145,7 @@ class PaperTrader {
         if (fx && tradingEnabled && !halted && availableDailyRisk > 0 && Number(state.trades_opened) < Number(settings.max_trades_per_day)) {
           for (const symbol of this.assets) {
             const ticker = market[symbol];
-            if (!ticker || ticker.signal !== 'BULLISH' || !Number.isFinite(Number(ticker.lastPrice))) continue;
+            if (!ticker || ticker.signal !== 'BULLISH' || Number(ticker.score) < MIN_ENTRY_SCORE || !Number.isFinite(Number(ticker.lastPrice))) continue;
             const alreadyOpen = await client.query("SELECT 1 FROM public.paper_trades WHERE symbol=$1 AND status='OPEN' LIMIT 1", [symbol]);
             if (alreadyOpen.rowCount) continue;
             const entry = Number(ticker.lastPrice);
@@ -194,6 +202,78 @@ class PaperTrader {
     } finally {
       this.running = false;
     }
+  }
+
+  async getPerformance() {
+    const [summary, bySymbol, closedRows] = await Promise.all([
+      this.pool.query(`
+        WITH closed AS (
+          SELECT pnl_gross_brl, fees_total_brl, pnl_net_brl
+          FROM public.paper_trades WHERE status='CLOSED'
+        )
+        SELECT count(*)::int AS closed_trades,
+          count(*) FILTER (WHERE pnl_net_brl > 0)::int AS wins,
+          count(*) FILTER (WHERE pnl_net_brl < 0)::int AS losses,
+          COALESCE(sum(pnl_gross_brl),0) AS gross_pnl_brl,
+          COALESCE(sum(fees_total_brl),0) AS fees_brl,
+          COALESCE(sum(pnl_net_brl),0) AS net_pnl_brl,
+          COALESCE(avg(pnl_net_brl),0) AS expectancy_brl,
+          COALESCE(avg(pnl_net_brl) FILTER (WHERE pnl_net_brl > 0),0) AS average_win_brl,
+          COALESCE(avg(pnl_net_brl) FILTER (WHERE pnl_net_brl < 0),0) AS average_loss_brl,
+          COALESCE(sum(pnl_net_brl) FILTER (WHERE pnl_net_brl > 0),0) /
+            NULLIF(abs(COALESCE(sum(pnl_net_brl) FILTER (WHERE pnl_net_brl < 0),0)),0) AS profit_factor
+        FROM closed
+      `),
+      this.pool.query(`
+        SELECT symbol, count(*)::int AS closed_trades,
+          count(*) FILTER (WHERE pnl_net_brl > 0)::int AS wins,
+          count(*) FILTER (WHERE pnl_net_brl < 0)::int AS losses,
+          COALESCE(sum(pnl_gross_brl),0) AS gross_pnl_brl,
+          COALESCE(sum(fees_total_brl),0) AS fees_brl,
+          COALESCE(sum(pnl_net_brl),0) AS net_pnl_brl
+        FROM public.paper_trades WHERE status='CLOSED'
+        GROUP BY symbol ORDER BY sum(pnl_net_brl) ASC
+      `),
+      this.pool.query(`
+        WITH curve AS (
+          SELECT closed_at, id, pnl_net_brl,
+            5000 + sum(pnl_net_brl) OVER (ORDER BY closed_at, id) AS equity
+          FROM public.paper_trades WHERE status='CLOSED'
+        ), peaks AS (
+          SELECT equity, greatest(5000, max(equity) OVER (ORDER BY closed_at, id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) AS peak
+          FROM curve
+        )
+        SELECT COALESCE(max(peak-equity),0) AS max_drawdown_brl FROM peaks
+      `)
+    ]);
+    const totals = summary.rows[0] || {};
+    const closed = Number(totals.closed_trades || 0);
+    const wins = Number(totals.wins || 0);
+    const losses = Number(totals.losses || 0);
+    const drawdown = Number(closedRows.rows[0]?.max_drawdown_brl || 0);
+    return {
+      sample: { closedTrades: closed, wins, losses, winRatePct: closed ? Number((wins / closed * 100).toFixed(1)) : 0 },
+      totals: {
+        grossPnlBRL: Number(totals.gross_pnl_brl || 0),
+        feesBRL: Number(totals.fees_brl || 0),
+        netPnlBRL: Number(totals.net_pnl_brl || 0),
+        expectancyPerTradeBRL: Number(totals.expectancy_brl || 0),
+        averageWinBRL: Number(totals.average_win_brl || 0),
+        averageLossBRL: Number(totals.average_loss_brl || 0),
+        profitFactor: totals.profit_factor === null ? null : Number(totals.profit_factor),
+        maxDrawdownBRL: drawdown
+      },
+      bySymbol: bySymbol.rows.map(row => ({
+        symbol: row.symbol, closedTrades: Number(row.closed_trades), wins: Number(row.wins),
+        losses: Number(row.losses), grossPnlBRL: Number(row.gross_pnl_brl),
+        feesBRL: Number(row.fees_brl), netPnlBRL: Number(row.net_pnl_brl)
+      })),
+      methodology: {
+        feesIncluded: true, slippageModeled: true, slippageStopPct: PAPER_STOP_SLIPPAGE_PCT,
+        slippageTargetPct: PAPER_TARGET_SLIPPAGE_PCT,
+        note: 'Métricas históricas PAPER; não representam resultado de execução real.'
+      }
+    };
   }
 
   async getStatus() {

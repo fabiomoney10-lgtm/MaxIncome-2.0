@@ -67,3 +67,32 @@ test('unit risk includes stop loss, round-trip fees and a slippage buffer',()=>{
 test('unit risk rejects invalid prices and rates',()=>{
  assert.throws(()=>calculateRiskPerUnitBRL({entryPrice:0,fxRate:5,stopLossPct:1,feeRatePerSide:0.001}),/Parâmetros inválidos/);
 });
+
+test('multi-filter strategy refuses overbought momentum even during an uptrend',()=>{
+ const candles=Array.from({length:70},(_,i)=>({
+  close:100+i, high:101+i, low:99+i, volume:1000
+ }));
+ const result=analyzeCandles(candles,candles);
+ assert.equal(result.signal,'WAIT');
+ assert.equal(result.filters.momentumHealthy,false);
+ assert.match(result.reason,/RSI fora da faixa/);
+});
+
+test('multi-filter strategy refuses entries without a confirmed 1h trend',()=>{
+ const candles=Array.from({length:70},(_,i)=>({
+  close:100+i*0.1+Math.sin(i)*0.2,
+  high:101+i*0.1+Math.sin(i)*0.2,
+  low:99+i*0.1+Math.sin(i)*0.2,
+  volume:1000
+ }));
+ const result=analyzeCandles(candles,[]);
+ assert.notEqual(result.signal,'BULLISH');
+ assert.equal(result.filters.higherTimeframeBullish,false);
+});
+
+test('multi-filter strategy requires real OHLCV fields and sufficient history',()=>{
+ const candles=Array.from({length:60},(_,i)=>({close:100+i}));
+ const result=analyzeCandles(candles,candles);
+ assert.equal(result.signal,'INSUFFICIENT_DATA');
+ assert.match(result.reason,/volume/);
+});
