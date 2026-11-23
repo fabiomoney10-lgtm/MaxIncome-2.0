@@ -2,6 +2,7 @@
 const express=require('express');
 const path=require('path');
 const {BybitClient}=require('./src/bybit');
+const {BybitExecutionGateway}=require('./src/bybit-execution');
 const {TradingEngine}=require('./src/trading-engine');
 const {SwingEngine}=require('./src/swing-engine');
 const {SwingPaperTrader}=require('./src/swing-paper-trader');
@@ -16,7 +17,8 @@ const port=Number(process.env.PORT||10000);
 const assets=(process.env.ASSETS||'XRPUSDT,BTCUSDT,ETHUSDT,SOLUSDT').split(',').map(x=>x.trim().toUpperCase()).filter(x=>/^[A-Z0-9]{3,20}USDT$/.test(x));
 const bybitEnvironment=(process.env.BYBIT_ENV||(process.env.BYBIT_TESTNET==='false'?'mainnet':'testnet')).toLowerCase();
 if(!['testnet','mainnet'].includes(bybitEnvironment))throw new Error('BYBIT_ENV deve ser testnet ou mainnet.');
-const client=new BybitClient({apiKey:'',apiSecret:'',testnet:bybitEnvironment==='testnet'});
+const client=new BybitClient({apiKey:process.env.BYBIT_API_KEY||'',apiSecret:process.env.BYBIT_SECRET_KEY||'',testnet:bybitEnvironment==='testnet'});
+const executionGateway=new BybitExecutionGateway({client,enabled:false});
 const engine=new TradingEngine({
  client,assets,legacyXrpReserved:Number(process.env.LEGACY_XRP_RESERVED||6),
  maxRiskBRL:process.env.MAX_RISK_BRL||50,maxDailyLossBRL:process.env.MAX_DAILY_LOSS_BRL||100,
@@ -99,6 +101,13 @@ app.get('/api/refresh',requireReadToken,async(_req,res)=>{
   if(!paperTrader)return res.status(503).json({error:databaseError||'Banco não configurado.',databaseConnected:false,orderExecutionEnabled:false});
   res.json({...publicStatus(),paper:await paperTrader.getStatus(),swing:{...swingEngine.getStatus(),paper:await swingPaperTrader.getStatus()}});
  }catch(e){res.status(503).json({error:'Estado PAPER indisponível.',detail:e.message,databaseConnected:false,orderExecutionEnabled:false});}
+});
+app.get('/api/execution/preflight',requireReadToken,async(_req,res)=>{
+ try{
+  if(bybitEnvironment!=='testnet')return res.status(409).json({error:'Pré-operação privada disponível somente na Bybit Testnet.',orderExecutionEnabled:false});
+  if(!process.env.BYBIT_API_KEY||!process.env.BYBIT_SECRET_KEY)return res.status(503).json({error:'Configure BYBIT_API_KEY e BYBIT_SECRET_KEY no Render para a consulta privada Testnet.',orderExecutionEnabled:false});
+  res.json({...await executionGateway.getPreflight(assets),orderExecutionEnabled:false});
+ }catch(e){res.status(503).json({error:'Verificação de pré-operação indisponível.',detail:e.message,orderExecutionEnabled:false});}
 });
 app.get('/api/balance',requireReadToken,async(_req,res)=>{
  return res.status(410).json({error:'Consulta privada de carteira desativada no simulador PAPER.'});
