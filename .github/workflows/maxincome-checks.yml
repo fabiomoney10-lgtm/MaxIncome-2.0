@@ -14,4 +14,4 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm test
-      - run: node --check server.js && node --check src/paper-trader.js && node --check src/trading-engine.js && node --check src/risk-manager.js
+      - run: node --check server.js && node --check src/paper-trader.js && node --check src/trading-engine.js && node --check src/risk-manager.js && node --check src/strategy.js && node --check src/bybit.js
