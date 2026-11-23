@@ -16,16 +16,20 @@ class TradingEngine {
     try{
       const rows=await Promise.all(this.assets.map(async symbol=>{
         try{
-          const [ticker,candles]=await Promise.all([this.client.getTicker(symbol),this.client.getKlines(symbol)]);
-          const analysis=analyzeCandles(candles);
+          const [ticker,candles15m,candles1h]=await Promise.all([
+            this.client.getTicker(symbol),
+            this.client.getKlines(symbol,'15','100'),
+            this.client.getKlines(symbol,'60','100')
+          ]);
+          const analysis=analyzeCandles(candles15m,candles1h);
           return [symbol,{...ticker,...analysis,risk:this.risk.evaluate({signal:analysis.signal,usdtBalance:null})}];
-        }catch(err){return [symbol,{error:err.message,signal:'INSUFFICIENT_DATA'}];}
+        }catch(err){return [symbol,{error:err.message,signal:'INSUFFICIENT_DATA',score:0}];}
       }));
       this.state.assets=Object.fromEntries(rows);
       this.state.connected=rows.some(([,v])=>Number.isFinite(Number(v.lastPrice)));
       this.state.updatedAt=new Date().toISOString();
       this.state.error=this.state.connected?null:'Nenhum ativo retornou dados válidos.';
-      this.addLog('Dados públicos: '+(this.client.marketDataEnvironment||'BYBIT MAINNET')+'. Ambiente privado configurado: '+(this.client.tradingEnvironment||this.client.environment)+'. PAPER ativo; ordens reais bloqueadas.');
+      this.addLog('Dados públicos Bybit Mainnet: análise 15m + confirmação 1h; PAPER ativo; ordens reais bloqueadas.');
       if(!this.state.connected)throw new Error(this.state.error);
     }catch(err){this.state.connected=false;this.state.error=err.message;this.addLog('Falha de sincronização: '+err.message);throw err;}
     finally{this.running=false;}
