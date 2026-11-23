@@ -50,6 +50,9 @@ class BybitExecutionGateway {
   }
 
   async getPreflight(symbols = []) {
+    if (this.client.testnet !== true) {
+      throw new Error('Verificação privada de pré-operação permitida somente na Bybit Testnet.');
+    }
     if (!Array.isArray(symbols) || symbols.length === 0) {
       throw new Error('Informe ao menos um ativo para a verificação.');
     }
@@ -64,7 +67,8 @@ class BybitExecutionGateway {
         'GET',
         '/v5/market/instruments-info',
         { category: 'spot', symbol },
-        false
+        false,
+        true
       ))
     ]);
 
