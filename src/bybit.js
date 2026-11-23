@@ -19,10 +19,10 @@ class BybitClient {
         this.recvWindow = '5000';
     }
 
-    async request(method, endpoint, params = {}, signed = false) {
-        const query = new URLSearchParams(params).toString();
+    async request(method, endpoint, params = {}, signed = false, useTradingEnvironment = false) {
+        const query = new URLSearchParams(Object.entries(params).sort(([a], [b]) => a.localeCompare(b))).toString();
         const body = method === 'POST' ? JSON.stringify(params) : '';
-        const requestBaseUrl = signed ? this.baseUrl : this.marketDataBaseUrl;
+        const requestBaseUrl = (signed || useTradingEnvironment) ? this.baseUrl : this.marketDataBaseUrl;
         const url = requestBaseUrl + endpoint +
             (method === 'GET' && query ? `?${query}` : '');
         const headers = {
