@@ -70,7 +70,7 @@ function analyzeTimeframe(candles) {
   };
 }
 
-function analyzeLongSetup({ symbol, frames, btcFrames, scannerScore = 0, minScore = 85 }) {
+function analyzeLongSetup({ symbol, frames, btcFrames, scannerScore = 0, currentPrice, minScore = 85 }) {
   const required = ['5m', '15m', '1h', '4h', '1d'];
   if (!symbol || !frames || required.some(tf => !analyzeTimeframe(frames[tf]))) {
     return { symbol, status: 'REJECTED', reason: 'HISTORICO_INSUFICIENTE' };
@@ -110,7 +110,12 @@ function analyzeLongSetup({ symbol, frames, btcFrames, scannerScore = 0, minScor
     return { symbol, status: 'REJECTED', score, checks, reason: 'FILTROS_DE_QUALIDADE_NAO_ATINGIDOS' };
   }
 
-  const entry = m15.close;
+  const candleEntry = m15.close;
+  const livePrice = Number(currentPrice);
+  if (!Number.isFinite(livePrice) || livePrice <= 0) return { symbol, status: 'REJECTED', score, checks, reason: 'PRECO_ATUAL_INDISPONIVEL' };
+  const priceDeviationPct = Math.abs(livePrice - candleEntry) / candleEntry * 100;
+  if (priceDeviationPct > 0.5) return { symbol, status: 'REJECTED', score, checks, reason: 'PRECO_SE_AFASTOU_DA_ENTRADA', priceDeviationPct };
+  const entry = livePrice;
   const stopDistance = m15.atr * 1.5;
   const stopPct = stopDistance / entry * 100;
   if (!Number.isFinite(stopDistance) || stopDistance <= 0 || stopPct < 0.25 || stopPct > 3.5) {
@@ -118,10 +123,13 @@ function analyzeLongSetup({ symbol, frames, btcFrames, scannerScore = 0, minScor
   }
   const stop = entry - stopDistance;
   const target = entry + stopDistance * 2;
-  const validUntil = new Date(m15.closeTime + 3 * 15 * 60 * 1000).toISOString();
+  const validUntilMs = m15.closeTime + 3 * 15 * 60 * 1000;
+  if (validUntilMs <= Date.now()) return { symbol, status: 'REJECTED', score, checks, reason: 'SINAL_EXPIRADO' };
+  const validUntil = new Date(validUntilMs).toISOString();
   return {
+    signalId: symbol + ':' + m15.closeTime,
     symbol, status: 'SIGNAL', side: 'BUY', score, entry, stop, target,
-    riskReward: 2, stopPct, validUntil, generatedAt: new Date().toISOString(),
+    riskReward: 2, stopPct, priceDeviationPct, validUntil, generatedAt: new Date().toISOString(),
     candleCloseTime: m15.closeTime, checks,
     reasons: ['TENDENCIA_1H_4H_CONFIRMADA', 'ENTRADA_5M_15M_CONFIRMADA', 'VOLUME_ACIMA_DA_MEDIA', 'RSI_EM_FAIXA_SAUDAVEL', 'BTC_SEM_SINAL_DE_RISCO']
   };
