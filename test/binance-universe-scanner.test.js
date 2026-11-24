@@ -17,7 +17,7 @@ test('keeps only active, liquid Spot USDT pairs with acceptable spread', () => {
       { symbol: 'CCCUSDT', quoteVolume: '4000000', lastPrice: '10', priceChangePercent: '2', highPrice: '11', lowPrice: '9', count: 10000 }
     ],
     bookTickers: [
-      { symbol: 'AAAUSDT', bidPrice: '9.99', askPrice: '10.01' },
+      { symbol: 'AAAUSDT', bidPrice: '9.995', askPrice: '10.005' },
       { symbol: 'CCCUSDT', bidPrice: '9.90', askPrice: '10.10' }
     ],
     minQuoteVolume: 1000000,
