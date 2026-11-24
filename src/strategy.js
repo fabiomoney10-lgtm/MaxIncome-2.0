@@ -97,7 +97,10 @@ function analyzeCandles(candles, higherTimeframeCandles = []) {
 
   const requiredFilters = trend && longTrend && momentumHealthy &&
     volatilityHealthy && volumeConfirmed && higherTimeframeBullish;
-  const signal = score >= 85 && requiredFilters ? 'BULLISH' : 'WAIT';
+  // BUY requires the core trend, momentum, volume and higher-timeframe filters.
+  // ATR is handled in the risk model; it informs stop distance but is not a directional veto.
+  const signal = score >= 85 && trend && longTrend && momentumHealthy && volumeConfirmed && higherTimeframeBullish
+    ? 'BULLISH' : 'WAIT';
   const reasons = [];
   if (!trend) reasons.push('SMA 9/21 sem alinhamento comprador');
   if (!longTrend) reasons.push('preço/EMA 50 sem tendência confirmada');
