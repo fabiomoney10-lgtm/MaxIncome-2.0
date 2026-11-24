@@ -14,8 +14,8 @@
 - `radar-server.js`: independent Express service; public health route and token-protected Radar endpoints.
 - `public/radar.html`: private read-token input, signals table and browser-side 60-second polling while the page remains open.
 - `GET /api/radar/universe` and `GET /api/radar/signals`: read-only endpoints.
-- CI on the current release commit passed both repository workflows, including tests and syntax checks.
-- Standalone Render service created: `MaxIncome-Radar`, Frankfurt, Free plan, branch `feature/binance-radar-signals`, deployed commit `8f51bddf806e505b7ec8d3a15054f472b689483d`.
+- Both repository CI workflows passed on code commit `8f51bddf806e505b7ec8d3a15054f472b689483d`, including tests and syntax checks. After dependency upgrades, Render built and started commit `3fff90d4ea579b536def10a62883578da48fe38b` successfully; a fresh `npm install` audit reported 0 vulnerabilities. CI has not yet reported against that dependency-upgrade commit.
+- Standalone Render service: `MaxIncome-Radar`, Frankfurt, Free plan, branch `feature/binance-radar-signals`, live deploy commit `3fff90d4ea579b536def10a62883578da48fe38b`.
 
 ## Initial engineering thresholds (not performance-validated)
 - Minimum 24h quote volume: 1,000,000 USDT.
@@ -28,7 +28,7 @@
 
 ## Remaining before calling this production-ready
 - Verify the live HTTP health endpoint and perform a live authenticated scanner request from a client network.
-- Investigate the 4 npm audit findings reported during Render build (1 moderate, 3 high); do not use `npm audit fix --force` blindly.
+- Commit a reproducible dependency lockfile and keep npm audit checks in CI; the latest Render build reported 0 vulnerabilities after upgrading Express and pg.
 - Persist signals, snapshots and outcomes in Supabase with a reviewed migration and least-privilege access.
 - Add server-side scheduling/streaming, reconnect and rate-limit handling. Current 60-second polling runs only while the browser page is open.
 - Add alert delivery and signal lifecycle (new, active, expired, invalidated).
