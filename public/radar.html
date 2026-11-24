@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MaxIncome Radar · Binance</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0e1622;color:#e8edf5;font:15px Arial,sans-serif;padding:22px}
+header,main{max-width:1180px;margin:auto}header{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+h1{margin:0;color:#f0b90b}.muted{color:#aab6c5}.pill{border:1px solid #526176;border-radius:30px;padding:8px 12px;color:#aab6c5}
+main{margin-top:20px}.summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.card{background:#192536;border:1px solid #2d3d52;border-radius:12px;padding:16px;min-width:0}.big{font-size:23px;font-weight:bold;margin:7px 0}
+button{background:#f0b90b;color:#111;border:0;border-radius:8px;padding:11px 15px;font-weight:bold;cursor:pointer}
+table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;padding:11px 9px;border-bottom:1px solid #344256;vertical-align:top}
+.buy{color:#55dda5;font-weight:bold}.wait{color:#ffd166;font-weight:bold}.bad{color:#ff8181}
+.small{font-size:13px;line-height:1.45}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
+@media(max-width:760px){body{padding:12px}.summary,.grid{grid-template-columns:1fr}table{font-size:13px}th,td{padding:8px 5px}}
+</style></head><body>
+<header><div><h1>MaxIncome Radar</h1><div class="muted">Binance Spot · análise de mercado · execução manual</div></div><div><a href="/" style="color:#f0b90b;margin-right:14px">Painel MaxIncome</a><button id="refresh">Atualizar sinais</button></div></header>
+<main>
+<div class="summary">
+<section class="card"><div class="muted">Conexão de mercado</div><div id="connection" class="big">Conectando…</div><div id="updated" class="muted small">Buscando dados públicos</div></section>
+<section class="card"><div class="muted">Sinais de compra confirmados</div><div id="buys" class="big">—</div><div class="muted small">Score mínimo 85/100</div></section>
+<section class="card"><div class="muted">Modo de funcionamento</div><div class="big">MANUAL</div><div class="muted small">Nenhuma ordem é enviada. Você decide se executa na Binance.</div></section>
+</div>
+<section class="card"><h3>Radar de oportunidades</h3><div class="muted small">A leitura combina candles de 15 minutos com confirmação de 1 hora. BUY só aparece quando os seis filtros técnicos passam; WAIT significa não entrar agora.</div>
+<div style="overflow-x:auto"><table><thead><tr><th>Ativo</th><th>Preço</th><th>24h</th><th>Sinal</th><th>Score</th><th>RSI</th><th>Entrada sugerida</th><th>Stop</th><th>Alvo 1</th><th>Alvo 2</th></tr></thead><tbody id="rows"><tr><td colspan="10">Carregando…</td></tr></tbody></table></div></section>
+<div id="details" class="grid"></div>
+<p class="muted small">Os sinais são leituras técnicas, não garantias de lucro. Preços podem mudar entre a atualização e sua execução. Confirme o livro de ofertas, taxas e liquidez na Binance antes de operar.</p>
+</main>
+<script>
+const fmt=(v,d=6)=>Number.isFinite(Number(v))?Number(v).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
+const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const price=(v)=>v==null?'—':fmt(v,Number(v)<1?6:2);
+async function refresh(){
+ const b=document.getElementById('refresh');b.disabled=true;b.textContent='Atualizando…';
+ try{
+  const r=await fetch('/api/radar/signals?refresh=1',{cache:'no-store'});const data=await r.json();if(!r.ok)throw new Error(data.error||'Falha ao consultar Binance');
+  document.getElementById('connection').textContent='Binance online';document.getElementById('connection').className='big buy';
+  document.getElementById('updated').textContent='Atualizado: '+new Date(data.updatedAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',hour12:false})+' · '+data.timeframe;
+  document.getElementById('buys').textContent=data.buyCount+' / '+data.signals.length;
+  document.getElementById('rows').innerHTML=data.signals.map(x=>'<tr><td><b>'+safe(x.symbol)+'</b></td><td>'+price(x.price)+'</td><td>'+fmt(x.change24hPct,2)+'%</td><td class="'+(x.signal==='BUY'?'buy':'wait')+'">'+safe(x.signal)+'</td><td>'+fmt(x.score,0)+'/100</td><td>'+fmt(x.rsi14,1)+'</td><td>'+price(x.entry)+'</td><td>'+price(x.stopLoss)+'</td><td>'+price(x.target1)+'</td><td>'+price(x.target2)+'</td></tr>').join('');
+  document.getElementById('details').innerHTML=data.signals.map(x=>'<section class="card"><b>'+safe(x.symbol)+' · '+safe(x.signal)+' · '+fmt(x.score,0)+'/100</b><p class="small">'+safe(x.reason)+'</p><div class="muted small">Filtros confirmados: '+Object.values(x.filters||{}).filter(Boolean).length+'/6 · Volume 24h: '+fmt(x.quoteVolume24h,0)+' USDT · RR alvo 2: '+fmt(x.riskRewardTarget2,1)+':1</div></section>').join('');
+ }catch(e){document.getElementById('connection').textContent='Sem conexão';document.getElementById('connection').className='big bad';document.getElementById('updated').textContent=e.message;document.getElementById('rows').innerHTML='<tr><td colspan="10">Não foi possível obter dados públicos da Binance. Tente atualizar.</td></tr>';}
+ finally{b.disabled=false;b.textContent='Atualizar sinais';}
+}
+document.getElementById('refresh').addEventListener('click',refresh);refresh();setInterval(refresh,30000);
+</script></body></html>

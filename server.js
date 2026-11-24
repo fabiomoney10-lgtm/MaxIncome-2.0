@@ -8,6 +8,7 @@ const {SwingEngine}=require('./src/swing-engine');
 const {SwingPaperTrader}=require('./src/swing-paper-trader');
 const {createReadTokenMiddleware}=require('./src/read-token');
 const {createPool,PaperTrader}=require('./src/paper-trader');
+const {getSignals}=require('./src/binance-radar');
 
 const app=express();
 app.disable('x-powered-by');
@@ -82,6 +83,7 @@ app.get('/api/health',async(_req,res)=>{
  res.status(ok?200:503).json({ok,service:'MaxIncome',mode:'PAPER',bybitEnvironment,marketDataEnvironment:'BYBIT MAINNET',marketConnected,databaseConnected:db,engineLoop:{...engineLoop},swingLoop:{...swingLoop},orderExecutionEnabled:false,databaseError:db?null:databaseError,timestamp:new Date().toISOString()});
 });
 app.get('/api/status',(_req,res)=>res.json(publicStatus()));
+app.get('/api/radar/signals',async(req,res)=>{try{res.set('Cache-Control','no-store');res.json(await getSignals(req.query.refresh==='1'));}catch(e){res.status(503).json({error:e.message,provider:'Binance Spot public market data'});}});
 app.get('/api/paper/performance',requireReadToken,async(_req,res)=>{
  try{if(!paperTrader)return res.status(503).json({error:databaseError||'Banco não configurado.'});res.json(await paperTrader.getPerformance());}
  catch(e){res.status(503).json({error:'Relatório de desempenho indisponível.',detail:e.message});}
@@ -112,6 +114,7 @@ app.get('/api/execution/preflight',requireReadToken,async(_req,res)=>{
 app.get('/api/balance',requireReadToken,async(_req,res)=>{
  return res.status(410).json({error:'Consulta privada de carteira desativada no simulador PAPER.'});
 });
+app.get('/radar',(req,res)=>res.sendFile(path.join(__dirname,'public','radar.html')));
 app.get('*',(_req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
 app.listen(port,'0.0.0.0',async()=>{
  console.log('MaxIncome 2.0 iniciado em PAPER. Execução real desabilitada.');
