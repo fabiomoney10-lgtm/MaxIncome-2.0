@@ -39,7 +39,7 @@ class BinanceRadarEngine {
       const frames = {};
       const responses = await Promise.all(TIMEFRAMES.map(tf => this.client.getKlines(candidate.symbol, tf, 100)));
       TIMEFRAMES.forEach((tf, index) => { frames[tf] = responses[index]; });
-      return this.analyzeLongSetup({ symbol: candidate.symbol, frames, btcFrames, scannerScore: candidate.scannerScore, minScore: this.minScore });
+      return this.analyzeLongSetup({ symbol: candidate.symbol, frames, btcFrames, scannerScore: candidate.scannerScore, currentPrice: candidate.lastPrice, minScore: this.minScore });
     });
     const signals = analyses.filter(item => item && item.status === 'SIGNAL');
     this.lastRun = {
