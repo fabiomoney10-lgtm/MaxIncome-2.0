@@ -28,16 +28,18 @@ test('timeframe analysis rejects incomplete history', () => {
 
 test('long setup rejects when Bitcoin context is missing', () => {
   const frames = Object.fromEntries(['5m','15m','1h','4h','1d'].map(tf => [tf, candles(80)]));
-  assert.equal(analyzeLongSetup({ symbol: 'AAAUSDT', frames }).reason, 'CONTEXTO_BTC_INDISPONIVEL');
+  assert.equal(analyzeLongSetup({ symbol: 'AAAUSDT', frames, currentPrice: frames['15m'][79].close }).reason, 'CONTEXTO_BTC_INDISPONIVEL');
 });
 
 test('long setup emits only BUY signals and enforces score and risk boundaries', () => {
   const frames = Object.fromEntries(['5m','15m','1h','4h','1d'].map(tf => [tf, candles(80, 0.2, 1500)]));
   const btcFrames = { '1h': candles(80, 0.2), '4h': candles(80, 0.2) };
-  const result = analyzeLongSetup({ symbol: 'AAAUSDT', frames, btcFrames, scannerScore: 95, minScore: 85 });
+  const result = analyzeLongSetup({ symbol: 'AAAUSDT', frames, btcFrames, scannerScore: 95, currentPrice: frames['15m'][79].close, minScore: 85 });
   assert.equal(result.status, 'SIGNAL', JSON.stringify(result));
   assert.equal(result.side, 'BUY');
   assert.equal(result.riskReward, 2);
+  assert.ok(result.priceDeviationPct <= 0.5);
+  assert.ok(result.signalId.includes('AAAUSDT:'));
   assert.ok(result.score >= 85 && result.score <= 100);
   assert.ok(result.stop < result.entry && result.target > result.entry);
 });
