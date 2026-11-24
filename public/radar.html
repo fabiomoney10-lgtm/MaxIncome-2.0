@@ -22,7 +22,7 @@ footer{color:var(--muted);font-size:12px;margin:22px 0}
 <body><main>
 <div class="top"><div><h1>MaxIncome Radar</h1><p>Scanner seletivo de oportunidades · Binance Spot</p></div><span class="pill">SOMENTE SINAIS · ORDENS BLOQUEADAS</span></div>
 <section class="panel"><h2>Conexão privada de leitura</h2><p>Informe o token de leitura configurado no servidor. Ele é enviado apenas no cabeçalho das consultas e não é salvo nesta página.</p>
-<div class="controls"><input id="token" type="password" autocomplete="off" placeholder="Token de leitura (Bearer)"><button id="scan">Buscar sinais</button></div><p id="status" aria-live="polite">Aguardando consulta.</p></section>
+<div class="controls"><input id="token" type="password" autocomplete="off" placeholder="Token de leitura (Bearer)"><button id="scan">Iniciar monitoramento</button></div><p id="status" aria-live="polite">Aguardando consulta.</p></section>
 <section class="panel"><div class="stats"><div class="stat"><small>Pares elegíveis</small><strong id="universe">—</strong></div><div class="stat"><small>Analisados</small><strong id="analyzed">—</strong></div><div class="stat"><small>Sinais válidos</small><strong id="signals">—</strong></div><div class="stat"><small>Modo</small><strong>Spot</strong></div></div></section>
 <section class="panel"><h2>Sinais ativos</h2><div class="table-wrap"><table><thead><tr><th>Par</th><th>Score</th><th>Entrada</th><th>Stop</th><th>Alvo 2:1</th><th>Validade</th></tr></thead><tbody id="rows"><tr><td colspan="6" class="empty">Nenhum sinal consultado.</td></tr></tbody></table></div></section>
 <footer>Os sinais são análises automatizadas, não garantem resultado. Confira preço, spread e liquidez na Binance antes de decidir. O Radar não envia ordens nem acessa sua carteira.</footer>
@@ -39,7 +39,7 @@ $('scan').addEventListener('click',async()=>{
   $('universe').textContent=data.universeCount??'—';$('analyzed').textContent=data.candidatesAnalyzed??'—';$('signals').textContent=data.signals?.length??0;
   const rows=data.signals||[];
   $('rows').innerHTML=rows.length?rows.map(s=>'<tr><td><strong>'+s.symbol+'</strong></td><td class="fine">'+s.score+'/100</td><td>'+fmt(s.entry)+'</td><td>'+fmt(s.stop)+'</td><td>'+fmt(s.target)+'</td><td>'+new Date(s.validUntil).toLocaleString('pt-BR')+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">Nenhum sinal atingiu todos os critérios. Isso é normal em um scanner seletivo.</td></tr>';
-  $('status').textContent='Atualizado em '+new Date(data.scannedAt).toLocaleString('pt-BR')+'. '+data.rejectedCount+' candidatos descartados.';
+  $('status').textContent='Atualizado em '+new Date(data.scannedAt).toLocaleString('pt-BR')+'. '+data.rejectedCount+' candidatos descartados. Atualização automática a cada 60 segundos.';\n  if(!monitor){monitor=setInterval(()=>{if(!$('scan').disabled){$('scan').disabled=true;refreshSignals().finally(()=>$('scan').disabled=false)}},60000);$('scan').textContent='Parar monitoramento'};
  }catch(error){$('status').textContent=error.message;$('status').className='error'}
  finally{$('scan').disabled=false}
 });
