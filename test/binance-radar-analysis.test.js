@@ -6,8 +6,12 @@ const { ema, rsi, atr, analyzeTimeframe, analyzeLongSetup } = require('../src/bi
 
 function candles(count, slope = 0.15, volume = 1000) {
   return Array.from({ length: count }, (_, i) => {
-    const close = 100 + i * slope;
-    return { open: close - 0.05, high: close + 0.3, low: close - 0.3, close, volume, closeTime: 1700000000000 + i * 900000 };
+    const close = 100 + i * slope + Math.sin(i * 1.7) * 0.7;
+    return {
+      open: close - 0.05, high: close + 0.3, low: close - 0.3,
+      close, volume: i === count - 1 ? volume * 1.5 : volume,
+      closeTime: 1700000000000 + i * 900000
+    };
   });
 }
 
