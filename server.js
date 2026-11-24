@@ -8,6 +8,8 @@ const {SwingEngine}=require('./src/swing-engine');
 const {SwingPaperTrader}=require('./src/swing-paper-trader');
 const {createReadTokenMiddleware}=require('./src/read-token');
 const {createPool,PaperTrader}=require('./src/paper-trader');
+const {BinanceSpotClient}=require('./src/binance-spot-client');
+const {BinanceUniverseScanner}=require('./src/binance-universe-scanner');
 
 const app=express();
 app.disable('x-powered-by');
@@ -71,6 +73,13 @@ function publicStatus(){
  return {...safe,balanceAvailable:false};
 }
 const requireReadToken=createReadTokenMiddleware();
+const binanceClient=new BinanceSpotClient();
+const radarScanner=new BinanceUniverseScanner({
+ client:binanceClient,
+ minQuoteVolume:Number(process.env.RADAR_MIN_QUOTE_VOLUME_USDT||1000000),
+ maxSpreadPct:Number(process.env.RADAR_MAX_SPREAD_PCT||0.15),
+ candidateLimit:Number(process.env.RADAR_CANDIDATE_LIMIT||50)
+});
 
 app.get('/api/health',async(_req,res)=>{
  let db=false;
@@ -82,6 +91,14 @@ app.get('/api/health',async(_req,res)=>{
  res.status(ok?200:503).json({ok,service:'MaxIncome',mode:'PAPER',bybitEnvironment,marketDataEnvironment:'BYBIT MAINNET',marketConnected,databaseConnected:db,engineLoop:{...engineLoop},swingLoop:{...swingLoop},orderExecutionEnabled:false,databaseError:db?null:databaseError,timestamp:new Date().toISOString()});
 });
 app.get('/api/status',(_req,res)=>res.json(publicStatus()));
+app.get('/api/radar/universe',requireReadToken,async(_req,res)=>{
+ try{
+  const result=await radarScanner.scan();
+  res.json({...result,source:'BINANCE SPOT PUBLIC API',ordersEnabled:false});
+ }catch(e){
+  res.status(503).json({error:'Scanner Binance indisponível.',detail:e.message,ordersEnabled:false,timestamp:new Date().toISOString()});
+ }
+});
 app.get('/api/paper/performance',requireReadToken,async(_req,res)=>{
  try{if(!paperTrader)return res.status(503).json({error:databaseError||'Banco não configurado.'});res.json(await paperTrader.getPerformance());}
  catch(e){res.status(503).json({error:'Relatório de desempenho indisponível.',detail:e.message});}

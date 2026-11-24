@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - run: npm install --ignore-scripts
       - run: npm test
       - name: Syntax check
@@ -25,3 +25,8 @@ jobs:
           node --check src/paper-trader.js
           node --check src/risk-guards.js
           node --check src/trading-engine.js
+          node --check radar-server.js
+          node --check src/binance-spot-client.js
+          node --check src/binance-universe-scanner.js
+          node --check src/binance-radar-analysis.js
+          node --check src/binance-radar-engine.js
