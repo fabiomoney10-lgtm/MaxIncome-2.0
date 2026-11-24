@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MaxIncome Radar</title>
+<style>
+:root{color-scheme:dark;--bg:#07111f;--panel:#101e30;--line:#263b53;--text:#e8f0fa;--muted:#9eb0c5;--accent:#38bdf8;--good:#34d399;--warn:#fbbf24}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(140deg,#07111f,#0b1930);color:var(--text);font:15px/1.5 system-ui,Segoe UI,sans-serif}
+main{max-width:1100px;margin:auto;padding:28px 18px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}
+h1{margin:0;font-size:28px}p{color:var(--muted)}.pill{border:1px solid #176b59;color:var(--good);padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.panel{background:rgba(16,30,48,.92);border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:18px}
+.controls{display:flex;gap:10px;flex-wrap:wrap}.controls input{flex:1;min-width:240px;background:#07111f;border:1px solid var(--line);border-radius:9px;color:var(--text);padding:12px}
+button{background:var(--accent);border:0;border-radius:9px;padding:12px 18px;font-weight:700;color:#062033;cursor:pointer}button:disabled{opacity:.5;cursor:wait}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.stat{background:#0a1728;border:1px solid var(--line);padding:12px;border-radius:10px}.stat small{display:block;color:var(--muted)}.stat strong{font-size:22px}
+table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--muted);font-size:12px}
+.empty{padding:24px;text-align:center;color:var(--muted)}.error{color:#fca5a5}.fine{color:var(--good)}.warning{color:var(--warn)}.table-wrap{overflow:auto}
+footer{color:var(--muted);font-size:12px;margin:22px 0}
+@media(max-width:620px){main{padding:18px 12px}h1{font-size:23px}}
+</style>
+</head>
+<body><main>
+<div class="top"><div><h1>MaxIncome Radar</h1><p>Scanner seletivo de oportunidades · Binance Spot</p></div><span class="pill">SOMENTE SINAIS · ORDENS BLOQUEADAS</span></div>
+<section class="panel"><h2>Conexão privada de leitura</h2><p>Informe o token de leitura configurado no servidor. Ele é enviado apenas no cabeçalho das consultas e não é salvo nesta página.</p>
+<div class="controls"><input id="token" type="password" autocomplete="off" placeholder="Token de leitura (Bearer)"><button id="scan">Buscar sinais</button></div><p id="status" aria-live="polite">Aguardando consulta.</p></section>
+<section class="panel"><div class="stats"><div class="stat"><small>Pares elegíveis</small><strong id="universe">—</strong></div><div class="stat"><small>Analisados</small><strong id="analyzed">—</strong></div><div class="stat"><small>Sinais válidos</small><strong id="signals">—</strong></div><div class="stat"><small>Modo</small><strong>Spot</strong></div></div></section>
+<section class="panel"><h2>Sinais ativos</h2><div class="table-wrap"><table><thead><tr><th>Par</th><th>Score</th><th>Entrada</th><th>Stop</th><th>Alvo 2:1</th><th>Validade</th></tr></thead><tbody id="rows"><tr><td colspan="6" class="empty">Nenhum sinal consultado.</td></tr></tbody></table></div></section>
+<footer>Os sinais são análises automatizadas, não garantem resultado. Confira preço, spread e liquidez na Binance antes de decidir. O Radar não envia ordens nem acessa sua carteira.</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const fmt=n=>Number(n).toLocaleString('pt-BR',{maximumFractionDigits:8});
+$('scan').addEventListener('click',async()=>{
+ const token=$('token').value.trim();if(!token){$('status').textContent='Informe o token de leitura.';return}
+ $('scan').disabled=true;$('status').textContent='Consultando Binance e calculando os filtros...';
+ try{
+  const response=await fetch('/api/radar/signals',{headers:{Authorization:'Bearer '+token}});
+  const data=await response.json();if(!response.ok)throw new Error(data.error||'Falha na consulta.');
+  $('universe').textContent=data.universeCount??'—';$('analyzed').textContent=data.candidatesAnalyzed??'—';$('signals').textContent=data.signals?.length??0;
+  const rows=data.signals||[];
+  $('rows').innerHTML=rows.length?rows.map(s=>'<tr><td><strong>'+s.symbol+'</strong></td><td class="fine">'+s.score+'/100</td><td>'+fmt(s.entry)+'</td><td>'+fmt(s.stop)+'</td><td>'+fmt(s.target)+'</td><td>'+new Date(s.validUntil).toLocaleString('pt-BR')+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">Nenhum sinal atingiu todos os critérios. Isso é normal em um scanner seletivo.</td></tr>';
+  $('status').textContent='Atualizado em '+new Date(data.scannedAt).toLocaleString('pt-BR')+'. '+data.rejectedCount+' candidatos descartados.';
+ }catch(error){$('status').textContent=error.message;$('status').className='error'}
+ finally{$('scan').disabled=false}
+});
+</script></body></html>
