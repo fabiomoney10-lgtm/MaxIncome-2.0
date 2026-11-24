@@ -18,11 +18,11 @@ async function binanceGet(path) {
   throw new Error('Dados públicos Binance indisponíveis: ' + (lastError?.message || 'erro desconhecido'));
 }
 
-function mapCandles(rows) {
+function mapCandles(rows, intervalMs) {
   return (Array.isArray(rows) ? rows : []).map(row => ({
     start: Number(row[0]), open: Number(row[1]), high: Number(row[2]),
     low: Number(row[3]), close: Number(row[4]), volume: Number(row[5])
-  })).filter(c => Number.isFinite(c.close) && c.close > 0 && c.start < Date.now() - 60000);
+  })).filter(c => Number.isFinite(c.close) && c.close > 0 && c.start + intervalMs <= Date.now());
 }
 
 async function analyzeSymbol(symbol) {
@@ -31,7 +31,7 @@ async function analyzeSymbol(symbol) {
     binanceGet('/api/v3/klines?symbol=' + encodeURIComponent(symbol) + '&interval=15m&limit=100'),
     binanceGet('/api/v3/klines?symbol=' + encodeURIComponent(symbol) + '&interval=1h&limit=100')
   ]);
-  const analysis = analyzeCandles(mapCandles(raw15m), mapCandles(raw1h));
+  const analysis = analyzeCandles(mapCandles(raw15m, 15 * 60 * 1000), mapCandles(raw1h, 60 * 60 * 1000));
   const price = Number(ticker.lastPrice);
   const validPrice = Number.isFinite(price) && price > 0;
   const stopPct = 1;
