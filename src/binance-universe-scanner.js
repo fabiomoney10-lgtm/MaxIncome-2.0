@@ -9,7 +9,8 @@ function buildEligibleUniverse({ exchangeInfo, tickers, bookTickers, minQuoteVol
 
   return symbols.flatMap(info => {
     if (info.status !== 'TRADING' || info.quoteAsset !== 'USDT' || info.isSpotTradingAllowed === false) return [];
-    if (Array.isArray(info.permissions) && !info.permissions.includes('SPOT')) return [];
+    if (Array.isArray(info.permissions) && info.permissions.length && !info.permissions.includes('SPOT')) return [];
+    if (Array.isArray(info.permissionSets) && info.permissionSets.length && !info.permissionSets.some(set => Array.isArray(set) && set.includes('SPOT'))) return [];
     const ticker = tickerBySymbol.get(info.symbol);
     const book = bookBySymbol.get(info.symbol);
     if (!ticker || !book) return [];
