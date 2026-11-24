@@ -7,7 +7,7 @@ header,main{max-width:1180px;margin:auto}header{display:flex;justify-content:spa
 h1{margin:0;color:#f0b90b}.muted{color:#aab6c5}.pill{border:1px solid #526176;border-radius:30px;padding:8px 12px;color:#aab6c5}
 main{margin-top:20px}.summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
 .card{background:#192536;border:1px solid #2d3d52;border-radius:12px;padding:16px;min-width:0}.big{font-size:23px;font-weight:bold;margin:7px 0}
-button{background:#f0b90b;color:#111;border:0;border-radius:8px;padding:11px 15px;font-weight:bold;cursor:pointer}
+button{background:#f0b90b;color:#111;border:0;border-radius:8px;padding:11px 15px;font-weight:bold;cursor:pointer}button:disabled{opacity:.6}
 table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;padding:11px 9px;border-bottom:1px solid #344256;vertical-align:top}
 .buy{color:#55dda5;font-weight:bold}.wait{color:#ffd166;font-weight:bold}.bad{color:#ff8181}
 .small{font-size:13px;line-height:1.45}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
@@ -16,30 +16,91 @@ table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;
 <header><div><h1>MaxIncome Radar</h1><div class="muted">Binance Spot · análise de mercado · execução manual</div></div><div><a href="/" style="color:#f0b90b;margin-right:14px">Painel MaxIncome</a><button id="refresh">Atualizar sinais</button></div></header>
 <main>
 <div class="summary">
-<section class="card"><div class="muted">Conexão de mercado</div><div id="connection" class="big">Conectando…</div><div id="updated" class="muted small">Buscando dados públicos</div></section>
+<section class="card"><div class="muted">Conexão de mercado</div><div id="connection" class="big">Conectando…</div><div id="updated" class="muted small">Buscando dados públicos diretamente do navegador</div></section>
 <section class="card"><div class="muted">Sinais de compra confirmados</div><div id="buys" class="big">—</div><div class="muted small">Score mínimo 85/100</div></section>
 <section class="card"><div class="muted">Modo de funcionamento</div><div class="big">MANUAL</div><div class="muted small">Nenhuma ordem é enviada. Você decide se executa na Binance.</div></section>
 </div>
-<section class="card"><h3>Radar de oportunidades</h3><div class="muted small">A leitura combina candles de 15 minutos com confirmação de 1 hora. BUY só aparece quando os seis filtros técnicos passam; WAIT significa não entrar agora.</div>
+<section class="card"><h3>Radar de oportunidades</h3><div class="muted small">Dados públicos consultados diretamente pelo seu navegador para contornar bloqueios de IP do servidor. Leitura com candles fechados de 15 minutos e confirmação de 1 hora. BUY exige score ≥85, filtros técnicos e liquidez.</div>
 <div style="overflow-x:auto"><table><thead><tr><th>Ativo</th><th>Preço</th><th>24h</th><th>Sinal</th><th>Score</th><th>RSI</th><th>Entrada sugerida</th><th>Stop</th><th>Alvo 1</th><th>Alvo 2</th></tr></thead><tbody id="rows"><tr><td colspan="10">Carregando…</td></tr></tbody></table></div></section>
 <div id="details" class="grid"></div>
-<p class="muted small">Os sinais são leituras técnicas, não garantias de lucro. Preços podem mudar entre a atualização e sua execução. Confirme o livro de ofertas, taxas e liquidez na Binance antes de operar.</p>
+<p class="muted small">Os sinais são leituras técnicas, não garantias de lucro. Preços podem mudar entre a atualização e sua execução. Confirme o livro de ofertas, taxas e liquidez na Binance antes de operar. O sistema não envia ordens e não acessa sua carteira.</p>
 </main>
 <script>
+const SYMBOLS=['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT'];
+const HOSTS=['https://data-api.binance.vision','https://api.binance.com','https://api1.binance.com','https://api2.binance.com','https://api3.binance.com'];
+const MIN_QUOTE_VOLUME=1000000,MAX_SPREAD_PCT=0.15;
 const fmt=(v,d=6)=>Number.isFinite(Number(v))?Number(v).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
 const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const price=(v)=>v==null?'—':fmt(v,Number(v)<1?6:2);
+const price=v=>v==null?'—':fmt(v,Number(v)<1?6:2);
+const clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
+async function publicGet(path){
+ let last;
+ for(const host of HOSTS){
+  try{
+   const response=await fetch(host+path,{headers:{Accept:'application/json'},cache:'no-store',signal:AbortSignal.timeout(9000)});
+   if(!response.ok){let extra='';try{const body=await response.json();extra=body.msg?' · '+body.msg:'';}catch{}throw new Error(host.replace('https://','')+' HTTP '+response.status+extra);}
+   return await response.json();
+  }catch(e){last=e;}
+ }
+ throw new Error(last?.message||'Falha em todos os endpoints públicos Binance');
+}
+function sma(values,n){if(values.length<n)return null;const a=values.slice(-n);return a.reduce((s,v)=>s+v,0)/n;}
+function ema(values,n){if(values.length<n)return null;const k=2/(n+1);let v=values.slice(0,n).reduce((s,x)=>s+x,0)/n;for(const x of values.slice(n))v=x*k+v*(1-k);return v;}
+function rsi(values,n=14){if(values.length<=n)return null;let gains=0,losses=0;for(let i=values.length-n;i<values.length;i++){const d=values[i]-values[i-1];if(d>0)gains+=d;else losses-=d;}if(losses===0)return gains>0?100:50;const rs=(gains/n)/(losses/n);return 100-100/(1+rs);}
+function atr(candles,n=14){if(candles.length<=n)return null;const ranges=[];for(let i=1;i<candles.length;i++){const c=candles[i],p=candles[i-1].close;ranges.push(Math.max(c.high-c.low,Math.abs(c.high-p),Math.abs(c.low-p)));}return sma(ranges,n);}
+function mapCandles(rows,ms){return rows.map(r=>({start:+r[0],open:+r[1],high:+r[2],low:+r[3],close:+r[4],volume:+r[5]})).filter(c=>Number.isFinite(c.close)&&c.close>0&&c.start+ms<=Date.now());}
+function bullishTrend(candles){const c=candles.map(x=>x.close);if(c.length<50)return false;const fast=sma(c,9),slow=sma(c,21),long=ema(c,50),prev=ema(c.slice(0,-5),50);return fast>slow&&c[c.length-1]>long&&long>prev;}
+function analyze(c15,c1h){
+ const closes=c15.map(c=>c.close),last=closes.at(-1),fast=sma(closes,9),slow=sma(closes,21),long=ema(closes,50),r=rsi(closes),a=atr(c15),atrPct=a&&last>0?a/last*100:null;
+ const vols=c15.map(c=>c.volume),hasVol=vols.length>=21&&vols.slice(-21).every(v=>Number.isFinite(v)&&v>=0),avg=hasVol?sma(vols.slice(0,-1),20):null;
+ const filters={
+  trend:Number.isFinite(fast)&&Number.isFinite(slow)&&fast>slow&&last>slow,
+  longTrend:Number.isFinite(long)&&last>long&&long>(ema(closes.slice(0,-5),50)||0),
+  momentumHealthy:Number.isFinite(r)&&r>=50&&r<=68,
+  volatilityHealthy:Number.isFinite(atrPct)&&atrPct>=0.15&&atrPct<=2.5,
+  volumeConfirmed:hasVol&&avg>0&&vols.at(-1)>=avg*0.8,
+  higherTimeframeBullish:bullishTrend(c1h)
+ };
+ if(closes.length<55||!Number.isFinite(r)||!Number.isFinite(a)||!hasVol) return {score:0,rsi14:r,atrPct,filters,technicalBuy:false,reason:'Dados insuficientes para validar tendência, RSI, ATR e volume.'};
+ let score=0; if(filters.trend)score+=20;if(filters.longTrend)score+=20;if(filters.momentumHealthy)score+=15;if(filters.volatilityHealthy)score+=10;if(filters.volumeConfirmed)score+=15;if(filters.higherTimeframeBullish)score+=20;
+ const technicalBuy=score>=85&&filters.trend&&filters.longTrend&&filters.momentumHealthy&&filters.volumeConfirmed&&filters.higherTimeframeBullish;
+ const reasons=[];if(!filters.trend)reasons.push('SMA 9/21 sem alinhamento comprador');if(!filters.longTrend)reasons.push('preço/EMA 50 sem tendência confirmada');if(!filters.momentumHealthy)reasons.push('RSI fora da faixa 50–68');if(!filters.volatilityHealthy)reasons.push('ATR fora da faixa operacional');if(!filters.volumeConfirmed)reasons.push('volume abaixo do filtro mínimo');if(!filters.higherTimeframeBullish)reasons.push('tendência de 1h não confirmada');
+ return {score,rsi14:r,atrPct,filters,technicalBuy,reason:technicalBuy?'Confluência dos filtros técnicos confirmada.':reasons.join('; ')};
+}
+async function analyzeSymbol(symbol){
+ const q=encodeURIComponent(symbol);
+ const [ticker,k15,k1h,book]=await Promise.all([
+  publicGet('/api/v3/ticker/24hr?symbol='+q),
+  publicGet('/api/v3/klines?symbol='+q+'&interval=15m&limit=120'),
+  publicGet('/api/v3/klines?symbol='+q+'&interval=1h&limit=120'),
+  publicGet('/api/v3/ticker/bookTicker?symbol='+q)
+ ]);
+ const c15=mapCandles(k15,900000),c1h=mapCandles(k1h,3600000),a=analyze(c15,c1h);
+ const p=+ticker.lastPrice,bid=+book.bidPrice,ask=+book.askPrice,volume=+ticker.quoteVolume;
+ const spread=bid>0&&ask>=bid?(ask-bid)/((ask+bid)/2)*100:null;
+ const liquidityOk=Number.isFinite(volume)&&volume>=MIN_QUOTE_VOLUME,spreadOk=Number.isFinite(spread)&&spread<=MAX_SPREAD_PCT,validPrice=Number.isFinite(p)&&p>0;
+ const stopPct=Number.isFinite(a.atrPct)&&a.atrPct>0?clamp(a.atrPct*1.5,0.6,2):null;
+ const buy=a.technicalBuy&&validPrice&&liquidityOk&&spreadOk&&stopPct!==null;
+ const dist=buy?p*stopPct/100:null;
+ const filters={...a.filters,liquidityOk,spreadOk};
+ const reasons=[a.reason];if(!liquidityOk)reasons.push('liquidez 24h abaixo de '+MIN_QUOTE_VOLUME.toLocaleString('en-US')+' USDT');if(!spreadOk)reasons.push('spread indisponível ou acima de '+MAX_SPREAD_PCT+'%');
+ return {symbol,price:validPrice?p:null,change24hPct:+ticker.priceChangePercent,quoteVolume24h:volume,spreadPct:spread,signal:buy?'BUY':'WAIT',score:a.score,rsi14:a.rsi14,stopPct,filters,reason:reasons.filter(Boolean).join('; '),entry:buy?p:null,stopLoss:buy?p-dist:null,target1:buy?p+dist*1.5:null,target2:buy?p+dist*2:null,riskRewardTarget2:2};
+}
+let busy=false;
 async function refresh(){
- const b=document.getElementById('refresh');b.disabled=true;b.textContent='Atualizando…';
+ if(busy)return;busy=true;const b=document.getElementById('refresh');b.disabled=true;b.textContent='Atualizando…';
  try{
-  const r=await fetch('/api/radar/signals?refresh=1',{cache:'no-store'});const data=await r.json();if(!r.ok)throw new Error(data.error||'Falha ao consultar Binance');
-  document.getElementById('connection').textContent='Binance online';document.getElementById('connection').className='big buy';
-  document.getElementById('updated').textContent='Atualizado: '+new Date(data.updatedAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',hour12:false})+' · '+data.timeframe;
-  document.getElementById('buys').textContent=data.buyCount+' / '+data.signals.length;
-  document.getElementById('rows').innerHTML=data.signals.map(x=>'<tr><td><b>'+safe(x.symbol)+'</b></td><td>'+price(x.price)+'</td><td>'+fmt(x.change24hPct,2)+'%</td><td class="'+(x.signal==='BUY'?'buy':'wait')+'">'+safe(x.signal)+'</td><td>'+fmt(x.score,0)+'/100</td><td>'+fmt(x.rsi14,1)+'</td><td>'+price(x.entry)+'</td><td>'+price(x.stopLoss)+'</td><td>'+price(x.target1)+'</td><td>'+price(x.target2)+'</td></tr>').join('');
-  document.getElementById('details').innerHTML=data.signals.map(x=>'<section class="card"><b>'+safe(x.symbol)+' · '+safe(x.signal)+' · '+fmt(x.score,0)+'/100</b><p class="small">'+safe(x.reason)+'</p><div class="muted small">Filtros confirmados: '+Object.values(x.filters||{}).filter(Boolean).length+'/8 · Spread: '+fmt(x.spreadPct,3)+'% · Volume 24h: '+fmt(x.quoteVolume24h,0)+' USDT · Stop ATR: '+fmt(x.stopPct,2)+'% · RR alvo 2: '+fmt(x.riskRewardTarget2,1)+':1</div></section>').join('');
- }catch(e){document.getElementById('connection').textContent='Sem conexão';document.getElementById('connection').className='big bad';document.getElementById('updated').textContent=e.message;document.getElementById('rows').innerHTML='<tr><td colspan="10">Não foi possível obter dados públicos da Binance. Tente atualizar.</td></tr>';}
- finally{b.disabled=false;b.textContent='Atualizar sinais';}
+  const results=await Promise.all(SYMBOLS.map(async s=>{try{return await analyzeSymbol(s);}catch(e){return {symbol:s,signal:'NO_DATA',score:0,reason:e.message,price:null,change24hPct:null,entry:null,stopLoss:null,target1:null,target2:null,filters:{}};}}));
+  results.sort((a,b)=>b.score-a.score);
+  const errors=results.filter(x=>x.signal==='NO_DATA').length;
+  document.getElementById('connection').textContent=errors===0?'Binance online':errors===results.length?'Sem conexão Binance':'Conexão parcial';
+  document.getElementById('connection').className='big '+(errors===0?'buy':errors===results.length?'bad':'wait');
+  document.getElementById('updated').textContent='Atualizado: '+new Date().toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',hour12:false})+' · navegador → Binance · 15m + 1h';
+  document.getElementById('buys').textContent=results.filter(x=>x.signal==='BUY').length+' / '+results.length;
+  document.getElementById('rows').innerHTML=results.map(x=>'<tr><td><b>'+safe(x.symbol)+'</b></td><td>'+price(x.price)+'</td><td>'+fmt(x.change24hPct,2)+'%</td><td class="'+(x.signal==='BUY'?'buy':x.signal==='NO_DATA'?'bad':'wait')+'">'+safe(x.signal)+'</td><td>'+fmt(x.score,0)+'/100</td><td>'+fmt(x.rsi14,1)+'</td><td>'+price(x.entry)+'</td><td>'+price(x.stopLoss)+'</td><td>'+price(x.target1)+'</td><td>'+price(x.target2)+'</td></tr>').join('');
+  document.getElementById('details').innerHTML=results.map(x=>'<section class="card"><b>'+safe(x.symbol)+' · '+safe(x.signal)+' · '+fmt(x.score,0)+'/100</b><p class="small">'+safe(x.reason)+'</p><div class="muted small">Filtros confirmados: '+Object.values(x.filters||{}).filter(Boolean).length+'/8 · Spread: '+fmt(x.spreadPct,3)+'% · Volume 24h: '+fmt(x.quoteVolume24h,0)+' USDT · Stop ATR: '+fmt(x.stopPct,2)+'% · RR alvo 2: '+fmt(x.riskRewardTarget2,1)+':1</div></section>').join('');
+ }catch(e){document.getElementById('connection').textContent='Sem conexão';document.getElementById('connection').className='big bad';document.getElementById('updated').textContent=e.message;document.getElementById('rows').innerHTML='<tr><td colspan="10">Não foi possível obter dados públicos da Binance.</td></tr>';}
+ finally{busy=false;b.disabled=false;b.textContent='Atualizar sinais';}
 }
 document.getElementById('refresh').addEventListener('click',refresh);refresh();setInterval(refresh,30000);
 </script></body></html>
