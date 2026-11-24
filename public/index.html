@@ -1,64 +1,22 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MaxIncome 2.0</title>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="0;url=/radar">
+<title>MaxIncome 2.0 · Binance Radar</title>
 <style>
-:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#101722;color:#e8edf5;font:15px Arial,sans-serif;padding:24px}
-header,main{max-width:1150px;margin:auto}header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-h1{color:#f0b90b;margin:0}.badge{padding:8px 12px;border-radius:20px;background:#493b12;color:#ffd95a;font-weight:bold}
-main{margin-top:22px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-.card{background:#1b2635;border:1px solid #2d3b4d;border-radius:12px;padding:18px;min-width:0}.wide{grid-column:1/-1}
-.muted{color:#aab6c5}.big{font-size:25px;font-weight:bold;margin:8px 0}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:9px;border-bottom:1px solid #344256}
-.good{color:#52d6a0}.warn{color:#ffd166}.bad{color:#ff7777}button{background:#f0b90b;border:0;border-radius:7px;padding:10px 14px;font-weight:bold;cursor:pointer}
-pre{white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto;color:#9fe6c6}input{background:#101722;color:#e8edf5;border:1px solid #526176;border-radius:7px;padding:10px;width:min(100%,320px);margin:6px 6px 6px 0}
-@media(max-width:700px){main{grid-template-columns:1fr}.wide{grid-column:auto}}
-</style></head><body>
-<header><div><h1>MaxIncome 2.0</h1><div class="muted">Simulador de operações • dados públicos de mercado</div></div><span id="badge" class="badge">PAPER · ORDENS REAIS DESABILITADAS</span> <a href="/swing.html" style="color:#f0b90b;font-weight:bold">Abrir Swing Trade</a></header>
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0e1622;color:#e8edf5;font:16px Arial,sans-serif}
+main{max-width:620px;padding:32px;text-align:center;background:#192536;border:1px solid #2d3d52;border-radius:14px}
+h1{color:#f0b90b}a{color:#f0b90b}
+</style>
+</head>
+<body>
 <main>
-<section class="card"><h3>Mercado</h3><div id="market" class="big warn">Conectando...</div><div id="updated" class="muted">Aguardando atualização</div></section>
-<section class="card"><h3>Banco de dados</h3><div id="database" class="big warn">Verificando...</div><div id="dbdetail" class="muted">Persistência do simulador</div></section>
-<section class="card"><h3>Capital virtual</h3><div id="capital" class="big">R$ 5.000,00</div><div id="daily" class="muted">Aguardando estado diário</div></section>
-<section class="card"><h3>Limites de risco</h3><div id="limits" class="muted">R$ 50 por operação · R$ 100 por dia · até 5 operações/dia · exposição R$ 5.000</div></section>
-<section class="card wide"><h3>Análise dos ativos — filtros de entrada</h3><table><thead><tr><th>Ativo</th><th>Preço</th><th>Variação 24h</th><th>Sinal</th><th>Score</th><th>RSI 14</th><th>Confirmação 1h</th></tr></thead><tbody id="assets"><tr><td colspan="7">Carregando...</td></tr></tbody></table><p class="muted">Entradas exigem score mínimo 85 e confirmação simultânea dos seis filtros: SMA 9/21, EMA 50, RSI, ATR, volume e tendência de 1 hora. Sem sinal confirmado, o robô aguarda.</p></section>
-<section class="card wide"><h3>Desempenho histórico PAPER — líquido de taxas</h3><div id="performanceSummary" class="muted">Aguardando relatório...</div><table><thead><tr><th>Ativo</th><th>Operações</th><th>Vitórias</th><th>Derrotas</th><th>Taxas</th><th>Resultado líquido</th></tr></thead><tbody id="performanceAssets"><tr><td colspan="6">Carregando...</td></tr></tbody></table><p class="muted">Inclui taxas e slippage estimado. Métricas históricas de simulação não garantem resultados futuros nem representam execução real.</p></section>
-<section class="card wide"><h3>Posições PAPER abertas</h3><table><thead><tr><th>Ativo</th><th>Quantidade</th><th>Entrada</th><th>Stop</th><th>Alvo</th><th>Risco (R$)</th></tr></thead><tbody id="open"><tr><td colspan="6">Carregando...</td></tr></tbody></table></section>
-<section class="card wide"><h3>Histórico de operações</h3><table><thead><tr><th>Ativo</th><th>Status</th><th>Entrada</th><th>Saída</th><th>Resultado líquido</th><th>Motivo</th></tr></thead><tbody id="history"><tr><td colspan="6">Carregando...</td></tr></tbody></table></section>
-<section class="card"><h3>Motor</h3><label for="readToken" class="muted">Token privado de leitura</label><input id="readToken" type="password" autocomplete="off" placeholder="Informe MAXINCOME_READ_TOKEN"><button id="saveToken">Conectar</button> <button id="refresh">Atualizar agora</button><p class="muted">O token fica somente nesta sessão do navegador. O simulador não envia ordens à Bybit, não movimenta saldo real e permanece em PAPER.</p></section>
-<section class="card"><h3>Registro</h3><pre id="log">Aguardando...</pre></section>
+<h1>MaxIncome 2.0</h1>
+<p>Redirecionando para o MaxIncome Radar — Binance Spot, sinais e execução manual.</p>
+<p>Se não abrir automaticamente, <a href="/radar">clique aqui para abrir o Radar</a>.</p>
 </main>
-<script>
-const money=v=>Number.isFinite(Number(v))?'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'--';
-const num=(v,d=6)=>Number.isFinite(Number(v))?Number(v).toFixed(d):'--';
-const safe=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const readTokenKey='maxincome_read_token';
-document.getElementById('readToken').value=sessionStorage.getItem(readTokenKey)||'';
-async function refresh(){
- const btn=document.getElementById('refresh');btn.disabled=true;
- try{
-  const token=sessionStorage.getItem(readTokenKey)||'';const r=await fetch('/api/refresh',{headers:token?{Authorization:'Bearer '+token}:{}});const s=await r.json();if(!r.ok)throw new Error(s.detail||s.error||'Falha');
-  const p=s.paper||{};const d=p.daily||{};const cfg=p.settings||{};
-  document.getElementById('market').textContent=s.connected?'Mercado online':'Mercado indisponível';
-  document.getElementById('market').className='big '+(s.connected?'good':'bad');
-  document.getElementById('updated').textContent='Atualizado: '+(s.updatedAt?new Date(s.updatedAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',hour12:false}):'--')+' · Horário: São Paulo (UTC−3) · Dados: '+(s.marketDataEnvironment||'BYBIT MAINNET')+' · Ambiente privado: '+(s.environment||'não utilizado no PAPER');
-  document.getElementById('badge').textContent='PAPER · DADOS PÚBLICOS BYBIT MAINNET · ORDENS REAIS BLOQUEADAS';
-  document.getElementById('database').textContent='Conectado';
-  document.getElementById('database').className='big good';
-  document.getElementById('dbdetail').textContent='Histórico persistente ativo';
-  document.getElementById('capital').textContent=money(cfg.initial_capital_brl||5000);
-  document.getElementById('daily').textContent='Resultado realizado: '+money(d.realized_pnl_brl||0)+' · não realizado: '+money(d.unrealized_pnl_brl||0)+' · operações: '+(d.trades_opened||0)+'/'+(cfg.max_trades_per_day||5)+' · risco reservado: '+money(p.dailyRiskReservedBRL||0)+' · risco disponível: '+money(p.dailyRiskAvailableBRL||0)+' · dia: '+safe(p.tradingDate||'--')+' (São Paulo)'+(d.halted?' · MOTOR PAUSADO':'');
-  document.getElementById('limits').textContent='Risco/op.: '+money(cfg.max_risk_per_trade_brl||50)+' · perda diária: '+money(cfg.max_daily_loss_brl||100)+' · exposição: '+money(cfg.max_exposure_brl||5000)+' · stop '+num(cfg.stop_loss_pct||1,2)+'% · alvo '+num(cfg.take_profit_pct||2,2)+'% · taxa/lado '+num((cfg.fee_rate_per_side||0.001)*100,3)+'%';
-  document.getElementById('assets').innerHTML=Object.entries(s.assets||{}).map(([sym,a])=>{const filters=a.filters||{};const passed=Object.values(filters).filter(Boolean).length;return '<tr><td>'+safe(sym)+'</td><td>'+(a.error?'--':num(a.lastPrice))+'</td><td>'+(a.error?'--':num(a.change24h,2)+'%')+'</td><td class="'+(a.signal==='BULLISH'?'good':a.signal==='BEARISH'?'bad':'warn')+'">'+safe(a.error?'ERRO':a.signal)+'</td><td>'+num(a.score,0)+'/100</td><td>'+num(a.rsi14,1)+'</td><td class="'+(filters.higherTimeframeBullish?'good':'warn')+'">'+(filters.higherTimeframeBullish?'Confirmada':'Não confirmada')+' · '+passed+'/6</td></tr>';}).join('')||'<tr><td colspan="7">Sem dados</td></tr>';
-  try{const pr=await fetch('/api/paper/performance',{headers:token?{Authorization:'Bearer '+token}:{}});const perf=await pr.json();if(!pr.ok)throw new Error(perf.error||'Token necessário');const sample=perf.sample||{},totals=perf.totals||{};document.getElementById('performanceSummary').innerHTML='Operações encerradas: <b>'+sample.closedTrades+'</b> · Acerto: <b>'+num(sample.winRatePct,1)+'%</b> · Resultado bruto: <b>'+money(totals.grossPnlBRL)+'</b> · Taxas: <b>'+money(totals.feesBRL)+'</b> · Líquido: <b class="'+(Number(totals.netPnlBRL)>=0?'good':'bad')+'">'+money(totals.netPnlBRL)+'</b> · Profit factor: <b>'+num(totals.profitFactor,2)+'</b> · Expectativa/op.: <b>'+money(totals.expectancyPerTradeBRL)+'</b> · Drawdown máx.: <b>'+money(totals.maxDrawdownBRL)+'</b>';
-  document.getElementById('performanceAssets').innerHTML=(perf.bySymbol||[]).map(x=>'<tr><td>'+safe(x.symbol)+'</td><td>'+x.closedTrades+'</td><td>'+x.wins+'</td><td>'+x.losses+'</td><td>'+money(x.feesBRL)+'</td><td class="'+(Number(x.netPnlBRL)>=0?'good':'bad')+'">'+money(x.netPnlBRL)+'</td></tr>').join('')||'<tr><td colspan="6">Sem operações encerradas</td></tr>';}catch(err){document.getElementById('performanceSummary').textContent='Relatório indisponível: '+err.message;document.getElementById('performanceAssets').innerHTML='<tr><td colspan="6">Informe o token privado de leitura e atualize.</td></tr>';}
-  document.getElementById('open').innerHTML=(p.openPositions||[]).map(t=>'<tr><td>'+safe(t.symbol)+'</td><td>'+num(t.quantity,8)+'</td><td>'+num(t.entry_price)+'</td><td>'+num(t.stop_price)+'</td><td>'+num(t.take_profit_price)+'</td><td>'+money(t.risk_brl)+'</td></tr>').join('')||'<tr><td colspan="6">Nenhuma posição aberta</td></tr>';
-  document.getElementById('history').innerHTML=(p.recentTrades||[]).map(t=>'<tr><td>'+safe(t.symbol)+'</td><td>'+safe(t.status)+'</td><td>'+num(t.entry_price)+'</td><td>'+num(t.exit_price)+'</td><td>'+money(t.pnl_net_brl)+'</td><td>'+safe(t.exit_reason||'--')+'</td></tr>').join('')||'<tr><td colspan="6">Nenhuma operação registrada</td></tr>';
-  document.getElementById('log').textContent=(s.log||[]).join('\\n')+'\\nFX USD/BRL indicativo: '+num(p.fxUsdBrl,4)+'\\n'+(p.error||'');
- }catch(e){
-  document.getElementById('market').textContent='Bloqueado: '+e.message;document.getElementById('market').className='big bad';
-  document.getElementById('database').textContent='Indisponível';document.getElementById('database').className='big bad';
-  document.getElementById('dbdetail').textContent='Configure DATABASE_URL no Render. Nenhuma operação será criada.';
- }
- finally{btn.disabled=false;}
-}
-document.getElementById('saveToken').addEventListener('click',()=>{const token=document.getElementById('readToken').value.trim();if(token)sessionStorage.setItem(readTokenKey,token);else sessionStorage.removeItem(readTokenKey);refresh();});
-document.getElementById('refresh').addEventListener('click',refresh);refresh();setInterval(refresh,30000);
-</script></body></html>
+<script>window.location.replace('/radar');</script>
+</body>
+</html>
