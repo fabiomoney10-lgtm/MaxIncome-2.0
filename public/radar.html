@@ -29,7 +29,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;
 const SYMBOLS=['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT'];
 const HOSTS=['https://data-api.binance.vision','https://api.binance.com','https://api1.binance.com','https://api2.binance.com','https://api3.binance.com'];
 const MIN_QUOTE_VOLUME=1000000,MAX_SPREAD_PCT=0.15;
-const fmt=(v,d=6)=>Number.isFinite(Number(v))?Number(v).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
+const fmt=(v,d=6)=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))?Number(v).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
 const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const price=v=>v==null?'—':fmt(v,Number(v)<1?6:2);
 const clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
